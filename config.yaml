@@ -1,0 +1,145 @@
+model:
+  model_name: 'BinarySegmentation'
+  class: "src.models.DeepLabV3Plus.DeepLabV3Plus"
+  params:
+    encoder_name: "mit_b5"
+    num_classes: 1
+    pretrained: true
+    use_aux: false
+
+dataset:
+  name: 'DUTS'
+
+  image:
+    width: 512
+    height: 512
+
+  splits:
+    seed: 42
+    method: "random"
+
+    ratios:
+      train: 0.8
+      val: 0.2
+
+dataloader:
+  batch_sizes:
+    train: 4
+    val: 4
+    test: 4
+
+  seed: 42
+  num_workers: 4
+  pin_memory: true
+  persistent_workers: true
+  prefetch_factor: 2
+
+learning:
+  epochs: 100
+  early_stopping_patience: 15
+  accumulation_steps: 4
+  use_fp16: True
+  use_gradient_checkpointing: True
+  log_interval: 5
+  save_criterion: 'val/iou'
+  mode: 'max'
+  use_cuda: True
+  threshold: 0.5
+
+  loss:
+    class: "src.losses.ComboLoss.ComboLoss"
+    params:
+      weights: [ 0.1, 0.9 ]
+      loss_functions:
+        - class: "src.losses.FocalLoss.FocalLoss"
+          params:
+            alpha: 0.8
+            gamma: 2.5
+            reduction: 'mean'
+            smooth: 1e-6
+
+        - class: "src.losses.SoftDiceLoss.SoftDiceLoss"
+          params: {}
+
+  optimizer:
+    class: "torch.optim.AdamW"
+    params:
+      lr: 1e-4
+      weight_decay: 1e-4
+
+  scheduler:
+    class: "torch.optim.lr_scheduler.CosineAnnealingWarmRestarts"
+    params:
+      T_0: 10
+      T_mult: 2
+      eta_min: 1e-7
+
+evaluating:
+  metrics:
+    - name: 'iou'
+      class: "torchmetrics.JaccardIndex"
+      params:
+        task: 'binary'
+
+    - name: 'accuracy'
+      class: "torchmetrics.Accuracy"
+      params:
+        task: 'binary'
+
+    - name: 'precision'
+      class: "torchmetrics.Precision"
+      params:
+        task: 'binary'
+
+    - name: 'recall'
+      class: "torchmetrics.Recall"
+      params:
+        task: 'binary'
+
+    - name: 'f1'
+      class: "torchmetrics.F1Score"
+      params:
+        task: 'binary'
+
+    - name: 'specificity'
+      class: "torchmetrics.Specificity"
+      params:
+        task: 'binary'
+
+    - name: 'mcc'
+      class: "torchmetrics.MatthewsCorrCoef"
+      params:
+        task: 'binary'
+
+logs:
+  default:
+    filename_pattern: "%Y%m%d_%H%M%S.log"
+    use_colors: false
+    console: true
+    console_level: "INFO"
+    file: true
+    file_level: "DEBUG"
+    max_bytes: 10485760
+    backup_count: 5
+    fmt: "[%(asctime)s.%(msecs)03d] - %(module)10s:%(lineno)-3d %(levelname)-7s - %(message)s"
+    datefmt: "%Y-%m-%d %H:%M:%S"
+    encoding: 'utf-8'
+
+  types:
+    train:
+      name: "segmentation_bg_train"
+      filename_pattern: "train_%Y%m%d_%H%M%S.log"
+      console_level: "INFO"
+      file_level: "DEBUG"
+
+    evaluate:
+      name: "segmentation_bg_evaluate"
+      filename_pattern: "evaluate_%Y%m%d_%H%M%S.log"
+      console_level: "INFO"
+      file_level: "INFO"
+
+    data:
+      name: "segmentation_bg_data"
+      filename_pattern: "data_%Y%m%d_%H%M%S.log"
+      console_level: "INFO"
+      file_level: "INFO"

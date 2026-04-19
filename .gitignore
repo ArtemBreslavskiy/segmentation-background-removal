@@ -1,0 +1,23 @@
+# Virtual environment
+venv/
+
+# Data
+data/raw/
+data/processed/
+
+# Logs
+logs/
+
+# Model weights
+*.pt
+*.pth
+models/best_model_tests/
+
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+
+# IDE
+.idea/
+.vscode/
