@@ -10,25 +10,25 @@ def get_train_transforms(
 ) -> Dict[str, Union[A.Compose, A.BasicTransform]]:
     geometric = A.Compose(
         [
+            A.RandomResizedCrop(
+                h, w,
+                scale=(0.25, 1.5),
+                ratio=(0.75, 1.33),
+                interpolation=cv2.INTER_LINEAR,
+                mask_interpolation=cv2.INTER_NEAREST,
+                p=1.0
+            ),
             A.HorizontalFlip(p=0.5),
             A.VerticalFlip(p=0.1),
             A.RandomRotate90(p=0.5),
             A.Affine(
-                scale=(0.85, 1.15),
                 translate_percent=(-0.1, 0.1),
-                rotate=(-20, 20),
+                rotate=(-15, 15),
                 shear=(-5, 5),
                 p=0.7,
                 border_mode=cv2.BORDER_REFLECT_101,
                 interpolation=cv2.INTER_LINEAR,
                 mask_interpolation=cv2.INTER_NEAREST,
-            ),
-            A.Resize(
-                h,
-                w,
-                interpolation=cv2.INTER_LINEAR,
-                mask_interpolation=cv2.INTER_NEAREST,
-                p=1.0,
             ),
         ],
         additional_targets={"mask": "image"},
@@ -45,13 +45,8 @@ def get_train_transforms(
             A.RGBShift(r_shift_limit=20, g_shift_limit=20, b_shift_limit=20, p=0.3),
             A.CLAHE(clip_limit=2.0, tile_grid_size=(8, 8), p=0.3),
             A.RandomGamma(gamma_limit=(70, 130), p=0.3),
-            A.CoarseDropout(
-                num_holes_range=(1, 8),
-                hole_height_range=(8, int(h * 0.15)),
-                hole_width_range=(8, int(w * 0.15)),
-                fill=0,
-                p=0.25,
-            ),
+            A.RandomToneCurve(scale=0.3, p=0.2),
+            A.ISONoise(color_shift=(0.01, 0.05), intensity=(0.1, 0.5), p=0.1),
             A.GaussNoise(std_range=(0.05, 0.15), p=0.2),
             A.Blur(blur_limit=3, p=0.2),
             A.RandomShadow(
