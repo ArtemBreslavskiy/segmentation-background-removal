@@ -55,11 +55,7 @@ def build_processed_dataset(
     elif len(datasets_names) == 1:
         msg = f"Dataset name: {datasets_names[0]}"
     else:
-        max_datasets_names = 10
-        if len(datasets_names) <= max_datasets_names:
-            msg = "The multi-dataset contains: " + ", ".join(datasets_names) + "."
-        else:
-            msg = "The multi-dataset contains: " + ", ".join(datasets_names[:max_datasets_names]) + " and others."
+        msg = "The multi-dataset contains: " + ", ".join(datasets_names) + "."
     logger.info(msg)
 
     def search_correct_directories(path: Path, criteria: Callable[[Path], bool]) -> List[Path]:
@@ -76,7 +72,7 @@ def build_processed_dataset(
 
     def image_directory_criteria(path: Path) -> bool:
         name = path.name.lower()
-        keywords = {'image', 'img', 'im', 'images', 'picture', 'photo'}
+        keywords = {'image', 'img', 'im', 'images', 'picture', 'photo', 'original'}
         return any(kw in name for kw in keywords)
 
     def mask_directory_criteria(path: Path) -> bool:
@@ -146,7 +142,7 @@ def build_processed_dataset(
 
         for name, pairs in datasets.items():
             logger.debug("%s contains %d pairs", name, len(pairs))
-        data_paths_lst = [(i, m, n) for n, p in datasets.items() for i, m in p]
+        data_paths_lst = [(image_path, mask_path, source) for source, pair in datasets.items() for image_path, mask_path in pair]
 
         logger.info("Splitting dataset into train/val...")
         random_seed = config["dataset"]["splits"]["seed"]
