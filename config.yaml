@@ -7,9 +7,6 @@ model:
     pretrained: true
     use_aux: false
 
-dataset:
-  name: 'DUTS'
-
   image:
     width: 512
     height: 512
@@ -21,6 +18,13 @@ dataset:
     ratios:
       train: 0.8
       val: 0.2
+
+dataset:
+  splits:
+    ratios:
+      val: 0.05
+      test: 0.05
+    seed: 42
 
 dataloader:
   batch_sizes:
@@ -114,7 +118,7 @@ evaluating:
 logs:
   default:
     filename_pattern: "%Y%m%d_%H%M%S.log"
-    use_colors: false
+    use_colors: true
     console: true
     console_level: "INFO"
     file: true

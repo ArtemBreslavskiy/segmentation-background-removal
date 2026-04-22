@@ -1,10 +1,11 @@
 import logging
 import shutil
-from typing import Optional
+from pathlib import Path
+from typing import Optional, Callable, List, Tuple
 
 import yaml
+import json
 from sklearn.model_selection import train_test_split
-from tqdm import tqdm
 
 from paths.ProjectPaths import ProjectPaths
 from src.logs.logger_setup import configure_loggers
@@ -23,10 +24,11 @@ def build_processed_dataset(
     path = ProjectPaths()
     logger.info("Raw data path: %s", path.RAW_DATA)
     logger.info("Processed data path: %s", path.PROCESSED_DATA)
+    with open(path.CONFIG) as f:
+        config = yaml.safe_load(f)
 
     if not path.RAW_DATA.exists():
         error_msg = f"Raw data not found at: {path.RAW_DATA}"
-        logger.critical("Dataset building failed. Check error log for details.")
         logger.exception(error_msg)
         raise ValueError(error_msg)
 
@@ -42,166 +44,159 @@ def build_processed_dataset(
         logger.info("Cleaning existing processed data...")
         shutil.rmtree(path.PROCESSED_DATA)
         logger.info("Old processed data removed successfully")
+    path.PROCESSED_DATA.mkdir(parents=True, exist_ok=True)
 
-    logger.info("Creating directory structure...")
+    datasets_paths = [f for f in path.RAW_DATA.iterdir() if f.is_dir()]
+    datasets_names = [f.name for f in datasets_paths]
+    if not datasets_names:
+        error_msg = "Raw data directory does not contain any dataset folders."
+        logger.exception(error_msg)
+        raise ValueError(error_msg)
+    elif len(datasets_names) == 1:
+        msg = f"Dataset name: {datasets_names[0]}"
+    else:
+        max_datasets_names = 10
+        if len(datasets_names) <= max_datasets_names:
+            msg = "The multi-dataset contains: " + ", ".join(datasets_names) + "."
+        else:
+            msg = "The multi-dataset contains: " + ", ".join(datasets_names[:max_datasets_names]) + " and others."
+    logger.info(msg)
 
-    path.TRAIN_IMAGES.mkdir(parents=True, exist_ok=True)
-    path.TRAIN_MASKS.mkdir(parents=True, exist_ok=True)
-    path.VAL_IMAGES.mkdir(parents=True, exist_ok=True)
-    path.VAL_MASKS.mkdir(parents=True, exist_ok=True)
-    path.TEST_IMAGES.mkdir(parents=True, exist_ok=True)
-    path.TEST_MASKS.mkdir(parents=True, exist_ok=True)
+    def search_correct_directories(path: Path, criteria: Callable[[Path], bool]) -> List[Path]:
+        if not path.is_dir():
+            return []
+        correct_directories = []
+        if criteria(path):
+            correct_directories.append(path)
+        else:
+            paths = [f for f in path.iterdir() if f.is_dir()]
+            for p in paths:
+                correct_directories.extend(search_correct_directories(p, criteria))
+        return correct_directories
+
+    def image_directory_criteria(path: Path) -> bool:
+        name = path.name.lower()
+        keywords = {'image', 'img', 'im', 'images', 'picture', 'photo'}
+        return any(kw in name for kw in keywords)
+
+    def mask_directory_criteria(path: Path) -> bool:
+        name = path.name.lower()
+        keywords = {
+            'mask', 'masks', 'matt', 'matte', 'label', 'labels',
+            'class', 'classes', 'object', 'gt', 'groundtruth',
+            'ground_truth', 'seg', 'segmentation', 'annotation'
+        }
+        return any(kw in name for kw in keywords)
+
+    def build_pairs(image_dir: Path, mask_dir: Path) -> List[Tuple[Path, Path]]:
+        pairs = []
+        mask_dict = {}
+        missing = 0
+        for mask_path in mask_dir.rglob("*"):
+            if mask_path.is_file() and mask_path.suffix.lower() in {'.jpg', '.jpeg', '.png'}:
+                mask_dict[mask_path.stem] = mask_path
+        for image_path in image_dir.rglob("*"):
+            if image_path.is_file() and image_path.suffix.lower() in {'.jpg', '.jpeg', '.png'}:
+                stem = image_path.stem
+                if stem in mask_dict:
+                    mask_path = mask_dict[stem]
+                    pairs.append((image_path, mask_path))
+                else:
+                    missing += 1
+        used_masks = set(p[1] for p in pairs)
+        unused_masks = len(mask_dict) - len(used_masks)
+        logger.info(f"Unused masks (no corresponding image): {unused_masks}")
+        logger.info(f"Total pairs: {len(pairs)}, missing: {missing}")
+        return pairs
+
+    def validate_pair(image_dir: Path, mask_dir: Path) -> bool:
+        image_stems = {p.stem for p in image_dir.rglob("*")
+                       if p.is_file() and p.suffix.lower() in {'.jpg', '.jpeg', '.png'}}
+        mask_stems = {p.stem for p in mask_dir.rglob("*")
+                      if p.is_file() and p.suffix.lower() in {'.jpg', '.jpeg', '.png'}}
+        return not image_stems.isdisjoint(mask_stems)
 
     try:
-        logger.info("Loading configuration...")
-        with open(path.CONFIG) as f:
-            config = yaml.safe_load(f)
-        logger.debug("Config loaded: %s", config.get("dataset", {}))
+        logger.info("Data structure recognition...")
+        datasets = {}
+        for dataset_path in datasets_paths:
+            image_dirs = search_correct_directories(dataset_path, image_directory_criteria)
+            mask_dirs = search_correct_directories(dataset_path, mask_directory_criteria)
+            if len(image_dirs) != len(mask_dirs):
+                logger.warning(
+                    f"Mismatch in {dataset_path.name}: {len(image_dirs)} image dirs vs {len(mask_dirs)} mask dirs. "
+                    f"Will pair only the first {min(len(image_dirs), len(mask_dirs))}."
+                )
+            datasets[dataset_path.name] = []
+            used_masks = set()
+            for image_path in image_dirs:
+                for mask_path in mask_dirs:
+                    if mask_path not in used_masks:
+                        if validate_pair(image_path, mask_path):
+                            file_pairs = build_pairs(image_path, mask_path)
+                            if file_pairs:
+                                datasets[dataset_path.name].extend(file_pairs)
+                                used_masks.add(mask_path)
+                                logger.info("%s + %s -> %d file pairs", image_path.name, mask_path.name, len(file_pairs))
+                                break
+                        else:
+                            logger.debug(f"Skipped pair: {image_path.name} + {mask_path.name} (no common files)")
+            if not datasets[dataset_path.name]:
+                logger.warning("No file pairs were built for dataset %s. Check directory structure and file names.", dataset_path.name)
 
-        logger.info("Scanning raw data files...")
-        train_val_images_lst = list(path.DUTS_TR_IMAGES.glob("*.jpg"))
-        train_val_masks_lst = list(path.DUTS_TR_MASKS.glob("*.png"))
-        test_images_lst = list(path.DUTS_TE_IMAGES.glob("*.jpg"))
-        test_masks_lst = list(path.DUTS_TE_MASKS.glob("*.png"))
-
-        logger.info("Found %d training/validation images", len(train_val_images_lst))
-        logger.info("Found %d training/validation masks", len(train_val_masks_lst))
-        logger.info("Found %d test images", len(test_images_lst))
-        logger.info("Found %d test masks", len(test_masks_lst))
-
-        train_val_images_lst.sort(key=lambda x: x.stem)
-        train_val_masks_lst.sort(key=lambda x: x.stem)
-        test_images_lst.sort(key=lambda x: x.stem)
-        test_masks_lst.sort(key=lambda x: x.stem)
-
-        if len(train_val_images_lst) != len(train_val_masks_lst):
-            error_msg = (
-                "Mismatch in train/val dataset: "
-                f"{len(train_val_images_lst)} images vs "
-                f"{len(train_val_masks_lst)} masks"
-            )
-            logger.critical("Dataset building failed. Check error log for details.")
-            logger.exception(error_msg)
-            raise ValueError(error_msg)
-
-        if len(test_images_lst) != len(test_masks_lst):
-            error_msg = (
-                "Mismatch in test dataset: "
-                f"{len(test_images_lst)} images vs {len(test_masks_lst)} masks"
-            )
-            logger.critical("Dataset building failed. Check error log for details.")
-            logger.exception(error_msg)
-            raise ValueError(error_msg)
-
-        logger.info("Checking filename consistency between images and masks...")
-        train_mismatches = []
-        test_mismatches = []
-
-        for image, mask in tqdm(
-            zip(train_val_images_lst, train_val_masks_lst),
-            leave=True,
-            desc="Checking train files",
-            unit="pair",
-        ):
-            if image.stem != mask.stem:
-                train_mismatches.append((image, mask))
-                logger.warning("Mismatch: image %s vs mask %s", image.name, mask.name)
-
-        for image, mask in tqdm(
-            zip(test_images_lst, test_masks_lst),
-            leave=True,
-            desc="Checking test files",
-            unit="pair",
-        ):
-            if image.stem != mask.stem:
-                test_mismatches.append((image, mask))
-                logger.warning("Mismatch: image %s vs mask %s", image.name, mask.name)
-
-        if len(train_mismatches) > 0 or len(test_mismatches) > 0:
-            error_msg = "Filename inconsistencies found in dataset"
-            logger.warning(error_msg)
-
-            if len(train_mismatches) > 0:
-                logger.error("Train set mismatches: %d pairs", len(train_mismatches))
-                for img, mask in train_mismatches[:20]:
-                    logger.error("  - %s <-> %s", img.name, mask.name)
-
-            if len(test_mismatches) > 0:
-                logger.error("Test set mismatches: %d pairs", len(test_mismatches))
-                for img, mask in test_mismatches[:20]:
-                    logger.error("  - %s <-> %s", img.name, mask.name)
-
-            raise ValueError(f"{error_msg}. Check error logs for details.")
-
-        logger.info("All filename checks passed ✓")
+        for name, pairs in datasets.items():
+            logger.debug("%s contains %d pairs", name, len(pairs))
+        data_paths_lst = [(i, m, n) for n, p in datasets.items() for i, m in p]
 
         logger.info("Splitting dataset into train/val...")
-        val_ratio = config["dataset"]["splits"]["ratios"]["val"]
         random_seed = config["dataset"]["splits"]["seed"]
+        test_ratio = config["dataset"]["splits"]["ratios"]["test"]
+        val_ratio = config["dataset"]["splits"]["ratios"]["val"]
+        test_val_ratio = test_ratio + val_ratio
 
-        logger.info("Validation ratio: %.2f, Random seed: %d", val_ratio, random_seed)
-
-        train_images_lst, val_images_lst, train_masks_lst, val_masks_lst = (
-            train_test_split(
-                train_val_images_lst,
-                train_val_masks_lst,
-                test_size=val_ratio,
-                random_state=random_seed,
-                shuffle=True,
-            )
+        sources = [s for _, _, s in data_paths_lst]
+        train, test_val = train_test_split(
+            data_paths_lst,
+            test_size=test_val_ratio,
+            random_state=random_seed,
+            stratify=sources,
         )
-
-        logger.info(
-            "Train set: %d images, %d masks",
-            len(train_images_lst),
-            len(train_masks_lst),
+        test_val_sources = [s for _, _, s in test_val]
+        val, test = train_test_split(
+            test_val,
+            test_size=test_ratio/test_val_ratio,
+            random_state=random_seed,
+            stratify=test_val_sources,
         )
-        logger.info(
-            "Validation set: %d images, %d masks",
-            len(val_images_lst),
-            len(val_masks_lst),
-        )
+        logger.info("Train: %d, Val: %d, Test: %d", len(train), len(val), len(test))
 
-        logger.info("Copying test files...")
-        for test_image, test_mask in tqdm(
-            zip(test_images_lst, test_masks_lst),
-            leave=True,
-            desc="Copying test data",
-            unit="pair",
-        ):
-            shutil.copy2(test_image, path.TEST_IMAGES / test_image.name)
-            shutil.copy2(test_mask, path.TEST_MASKS / test_mask.name)
+        def save_manifest(data: List[Tuple[Path, Path, str]], filepath: Path):
+            manifest = []
+            for d in data:
+                image_path, mask_path, source = d
+                manifest.append({
+                    "image": str(image_path.resolve()),
+                    "mask": str(mask_path.resolve()),
+                    "source": source})
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(manifest, f, indent=2, ensure_ascii=False)
 
-        logger.info("Copying train files...")
-        for train_image, train_mask in tqdm(
-            zip(train_images_lst, train_masks_lst),
-            leave=True,
-            desc="Copying train data",
-            unit="pair",
-        ):
-            shutil.copy2(train_image, path.TRAIN_IMAGES / train_image.name)
-            shutil.copy2(train_mask, path.TRAIN_MASKS / train_mask.name)
-
-        logger.info("Copying validation files...")
-        for val_image, val_mask in tqdm(
-            zip(val_images_lst, val_masks_lst),
-            leave=True,
-            desc="Copying validation data",
-            unit="pair",
-        ):
-            shutil.copy2(val_image, path.VAL_IMAGES / val_image.name)
-            shutil.copy2(val_mask, path.VAL_MASKS / val_mask.name)
+        logger.info("Creating JSON files...")
+        save_manifest(train, path.TRAIN)
+        save_manifest(test, path.TEST)
+        save_manifest(val, path.VAL)
+        logger.debug("JSON files have been created successfully")
 
         logger.info("=" * 60)
         logger.info("DATASET BUILD COMPLETED SUCCESSFULLY")
         logger.info("=" * 60)
 
-        logger.info("Train images: %d", len(train_images_lst))
-        logger.info("Validation images: %d", len(val_images_lst))
-        logger.info("Test images: %d", len(test_images_lst))
+        logger.info("Train images: %d", len(train))
+        logger.info("Validation images: %d", len(val))
+        logger.info("Test images: %d", len(test))
         logger.info(
             "Total: %d",
-            len(train_images_lst) + len(test_images_lst) + len(val_images_lst),
+            len(train) + len(val) + len(test)
         )
         logger.info("=" * 60)
 
