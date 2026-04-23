@@ -20,13 +20,13 @@ class WeightedDynamicBucketBatchSampler(WeightedRandomSampler):
         send_overload_report: bool = True
     ):
         if base_batch_size < 1:
-            raise ValueError("base_batch_size cannot be less than 1")
+            raise ValueError("base_batch_size must be >= 1")
         if max_batch_size < 1:
-            raise ValueError("max_batch_size cannot be less than 1")
+            raise ValueError("max_batch_size must be >= 1")
         if min_batch_size < 1:
-            raise ValueError("min_batch_size cannot be less than 1")
+            raise ValueError("min_batch_size must be >= 1")
         if reference_area < 1:
-            raise ValueError("reference_area cannot be less than 1")
+            raise ValueError("reference_area must be >= 1")
         if max_batch_size < min_batch_size:
             raise ValueError("max_batch_size cannot be less than min_batch_size")
         if len(weights) == 0:
