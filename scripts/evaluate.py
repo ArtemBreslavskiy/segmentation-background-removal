@@ -4,11 +4,11 @@ from typing import Optional
 import torch
 import yaml
 
-from data.dataloaders import get_test_dataloader
+from src.utils.factories.dataloaders_factory import get_test_dataloader
 from paths.ProjectPaths import ProjectPaths
 from src.engine.Tester import Tester
 from src.logs.logger_setup import configure_loggers
-from src.utils.factory import create_metrics
+from src.utils.factories.metrics_factory import create_metrics
 
 
 def evaluate(logger: Optional[logging.Logger] = None):

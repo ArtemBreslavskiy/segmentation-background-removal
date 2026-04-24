@@ -10,11 +10,11 @@ class WeightedDynamicBucketBatchSampler(WeightedRandomSampler):
         weights: List[float],
         dataset_areas: List[int],
         dataset_aspect_ratios: List[float],
+        shuffle: bool = True,
         base_batch_size: int = 8,
         max_batch_size: int = 32,
         min_batch_size: int = 1,
         reference_area: int = 512**2,
-        shuffle: bool = True,
         replacement: bool = False,
         skip_overload_examples: bool = True,
         send_overload_report: bool = True

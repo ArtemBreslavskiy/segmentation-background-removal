@@ -6,17 +6,15 @@ from typing import Optional
 import torch
 import yaml
 
-from data.dataloaders import get_train_dataloader, get_val_dataloader
+from src.utils.factories.dataloaders_factory import get_train_dataloader, get_val_dataloader
 from paths.ProjectPaths import ProjectPaths
 from src.engine.Trainer import Trainer
 from src.logs.logger_setup import configure_loggers
-from src.utils.factory import (
-    create_loss,
-    create_metrics,
-    create_model,
-    create_optimizer,
-    create_scheduler,
-)
+from src.utils.factories.loss_fn_factory import create_loss
+from src.utils.factories.metrics_factory import create_metrics
+from src.utils.factories.model_factory import create_model
+from src.utils.factories.optimizer_factory import create_optimizer
+from src.utils.factories.scheduler_factory import create_scheduler
 
 
 def train(logger: Optional[logging.Logger] = None):

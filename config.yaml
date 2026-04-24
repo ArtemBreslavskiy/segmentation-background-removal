@@ -7,36 +7,58 @@ model:
     pretrained: true
     use_aux: false
 
-  image:
-    width: 512
-    height: 512
-
-  splits:
-    seed: 42
-    method: "random"
-
-    ratios:
-      train: 0.8
-      val: 0.2
-
 dataset:
   splits:
     ratios:
       val: 0.05
       test: 0.05
     seed: 42
+    method: "random"
+
+  max_area: 1048576  #1024**2
+  resize_mode: "crop"
+
+  weights:
+    AISegment: 1.0
+    AM-2k: 1.0
+    DIS5K: 1.0
+    DUTS: 1.0
+    HRS10K: 1.0
+    HRSOD: 1.0
+    MaSS13K: 1.0
+    P3M-10k: 1.0
+    ToonOut: 1.0
+    UHRSD: 1.0
 
 dataloader:
   batch_sizes:
-    train: 4
-    val: 4
-    test: 4
+    train: null
+    val: null
+    test: null
+  shuffle:
+    train: null
+    val: null
+    test: null
 
   seed: 42
   num_workers: 4
   pin_memory: true
   persistent_workers: true
   prefetch_factor: 2
+  sampler:
+    class: "src.data.WeightedDynamicBucketBatchSampler.WeightedDynamicBucketBatchSampler"
+    params:
+      base_batch_size: 8
+      max_batch_size: 32
+      min_batch_size: 1
+      reference_area: 262144  #512**2
+      replacement: True
+      skip_overload_examples: True
+      send_overload_report: True
+  pad_collate:
+    enabled: true
+    alignment: 32
+    pad_value: 0.0
 
 learning:
   epochs: 100
@@ -48,10 +70,10 @@ learning:
   use_gradient_checkpointing: True
   compile_model: true
   compile_dynamic: true
-  compile_options: 'default'
+  compile_options: "default"
   log_interval: 5
-  save_criterion: 'val/iou'
-  mode: 'max'
+  save_criterion: "val/iou"
+  mode: "max"
   use_cuda: True
   threshold: 0.5
 

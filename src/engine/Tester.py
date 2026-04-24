@@ -80,7 +80,7 @@ class Tester(BaseModule):
                 "Checkpoint does not contain config. Cannot restore components."
             )
 
-        from src.utils.factory import (
+        from src.utils.visualization.factory import (
             create_loss,
             create_metrics,
             create_model,

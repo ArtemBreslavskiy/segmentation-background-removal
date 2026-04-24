@@ -1,0 +1,45 @@
+import json
+from pathlib import Path
+from typing import Union, List, Optional, Dict
+
+from src.data.BinarySegmentationDataset import BinarySegmentationDataset
+from src.data.transforms import get_train_transforms, get_val_test_transforms
+
+
+def get_dataset(
+    config: Dict,
+    mode: str,
+    json_path: Optional[Union[str, Path]] = None,
+    manifest: Optional[List[Dict]] = None,
+) -> BinarySegmentationDataset:
+    mode = mode.lower()
+    correct_modes = ["train", "test", "val"]
+    if mode not in correct_modes:
+        raise ValueError(f"Unknown mode: {mode}. Available mods: {correct_modes}")
+    if not manifest:
+        if json_path:
+            with open(json_path, 'r', encoding='utf-8') as f:
+                manifest = json.load(f)
+        else:
+            raise ValueError("Either json_path or manifest must be provided")
+    transforms = get_train_transforms() if mode == "train" else get_val_test_transforms()
+    dataset_config = config["dataset"]
+
+    return BinarySegmentationDataset(
+        manifest=manifest,
+        transforms=transforms,
+        max_area=dataset_config.get("max_area", 0),
+        resize_mode=dataset_config.get("resize_mode", "resize"),
+    )
+
+
+def get_train_dataset(config: Dict, json_path: Optional[Union[str, Path]]) -> BinarySegmentationDataset:
+    return get_dataset(config=config, mode="train", json_path=json_path)
+
+
+def get_test_dataset(config: Dict, json_path: Optional[Union[str, Path]]) -> BinarySegmentationDataset:
+    return get_dataset(config=config, mode="test", json_path=json_path)
+
+
+def get_val_dataset(config: Dict, json_path: Optional[Union[str, Path]]) -> BinarySegmentationDataset:
+    return get_dataset(config=config, mode="val", json_path=json_path)
