@@ -10,14 +10,6 @@ def get_train_transforms(
 ) -> Dict[str, Union[A.Compose, A.BasicTransform]]:
     geometric = A.Compose(
         [
-            A.RandomResizedCrop(
-                h, w,
-                scale=(0.25, 1.5),
-                ratio=(0.75, 1.33),
-                interpolation=cv2.INTER_LINEAR,
-                mask_interpolation=cv2.INTER_NEAREST,
-                p=1.0
-            ),
             A.HorizontalFlip(p=0.5),
             A.VerticalFlip(p=0.1),
             A.RandomRotate90(p=0.5),

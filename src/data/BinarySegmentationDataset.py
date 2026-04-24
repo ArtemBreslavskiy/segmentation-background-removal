@@ -15,8 +15,13 @@ class BinarySegmentationDataset(data.Dataset):
         json_path: Optional[Union[str, Path]] = None,
         manifest: Optional[List[Dict]] = None,
         transforms: Optional[Union[A.Compose, Dict[str, A.Compose]]] = None,
+        max_area: int = 0,
+        resize_mod: str = 'resize'
     ):
-        self.path = Path(json_path)
+        resize_mods = ['resize', 'crop']
+        if resize_mod not in resize_mods:
+            raise ValueError(f"Incorrect resize_mod. resize_mod can be: {resize_mods}")
+
         self.transforms = transforms
         if not manifest:
             if json_path:
@@ -26,23 +31,42 @@ class BinarySegmentationDataset(data.Dataset):
                 raise ValueError("Either json_path or manifest must be provided")
         self.images = [Path(item['image']) for item in manifest]
         self.masks = [Path(item['mask']) for item in manifest]
-        self.sources = [item.get('source', 'unknown') for item in manifest]
+        self.max_area = max_area
+        self.resize_mod = resize_mod
+        if self.max_area > 0:
+            self.areas = [item.get('area', 0) for item in manifest]
         self.length = len(self.images)
 
     def __getitem__(self, idx):
         path_image = self.images[idx]
         path_mask = self.masks[idx]
-        source = self.sources[idx]
+        if self.max_area > 0:
+            area = self.areas[idx]
 
         image = cv2.imread(str(path_image))
+        mask = cv2.imread(str(path_mask), cv2.IMREAD_GRAYSCALE)
         if image is None:
             raise FileNotFoundError(f"Image not found: {path_image}")
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        image = image.astype("float32") / 255.0
-
-        mask = cv2.imread(str(path_mask), cv2.IMREAD_GRAYSCALE)
         if mask is None:
             raise FileNotFoundError(f"Mask not found: {path_mask}")
+
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        if self.max_area > 0:
+            if area > self.max_area:
+                h, w = image.shape[:2]
+                scale = np.sqrt(self.max_area / (h * w))
+                new_h = int(h * scale)
+                new_w = int(w * scale)
+                if self.resize_mod == 'resize':
+                    image = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+                    mask = cv2.resize(mask, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
+                elif self.resize_mod == 'crop':
+                    crop = A.RandomCrop(height=new_h, width=new_w, p=1.0)
+                    transformed = crop(image=image, mask=mask)
+                    image = transformed["image"]
+                    mask = transformed["mask"]
+
+        image = image.astype("float32") / 255.0
         mask = (mask != 0).astype(np.float32)
 
         if self.transforms:
@@ -75,8 +99,9 @@ class BinarySegmentationDataset(data.Dataset):
                 image = augmented["image"]
                 mask = augmented["mask"]
 
-        else:
+        if isinstance(image, np.ndarray):
             image = torch.from_numpy(image).float().permute(2, 0, 1)
+        if isinstance(mask, np.ndarray):
             mask = torch.from_numpy(mask).float().unsqueeze(0)
 
         mask = (mask > 0.5).float()
