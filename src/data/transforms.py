@@ -5,9 +5,7 @@ import albumentations.pytorch as AP
 import cv2
 
 
-def get_train_transforms(
-    h: int = 384, w: int = 384
-) -> Dict[str, Union[A.Compose, A.BasicTransform]]:
+def get_train_transforms() -> Dict[str, Union[A.Compose, A.BasicTransform]]:
     geometric = A.Compose(
         [
             A.HorizontalFlip(p=0.5),
@@ -37,8 +35,6 @@ def get_train_transforms(
             A.RGBShift(r_shift_limit=20, g_shift_limit=20, b_shift_limit=20, p=0.3),
             A.CLAHE(clip_limit=2.0, tile_grid_size=(8, 8), p=0.3),
             A.RandomGamma(gamma_limit=(70, 130), p=0.3),
-            A.RandomToneCurve(scale=0.3, p=0.2),
-            A.ISONoise(color_shift=(0.01, 0.05), intensity=(0.1, 0.5), p=0.1),
             A.GaussNoise(std_range=(0.05, 0.15), p=0.2),
             A.Blur(blur_limit=3, p=0.2),
             A.RandomShadow(
@@ -68,22 +64,7 @@ def get_train_transforms(
     }
 
 
-def get_val_test_transforms(
-    h: int = 384, w: int = 384
-) -> Dict[str, Union[A.Compose, A.BasicTransform]]:
-    geometric = A.Compose(
-        [
-            A.Resize(
-                h,
-                w,
-                interpolation=cv2.INTER_LINEAR,
-                mask_interpolation=cv2.INTER_NEAREST,
-                p=1.0,
-            ),
-        ],
-        additional_targets={"mask": "image"},
-    )
-
+def get_val_test_transforms() -> Dict[str, Union[A.Compose, A.BasicTransform]]:
     final_image = A.Compose(
         [
             A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
@@ -94,7 +75,7 @@ def get_val_test_transforms(
     final_mask = AP.ToTensorV2()
 
     return {
-        "geometric": geometric,
+        "geometric": None,
         "photometric": None,
         "final_image": final_image,
         "final_mask": final_mask,

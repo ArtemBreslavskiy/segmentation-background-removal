@@ -10,25 +10,19 @@ def get_train_dataset(
 ) -> BinarySegmentationDataset:
     return BinarySegmentationDataset(
         path,
-        get_train_transforms(
-            config["dataset"]["image"]["height"], config["dataset"]["image"]["width"]
-        ),
+        get_train_transforms(),
     )
 
 
 def get_val_dataset(config: Dict, path: Union[Path, str]) -> BinarySegmentationDataset:
     return BinarySegmentationDataset(
         path,
-        get_val_test_transforms(
-            config["dataset"]["image"]["height"], config["dataset"]["image"]["width"]
-        ),
+        get_val_test_transforms(),
     )
 
 
 def get_test_dataset(config: Dict, path: Union[Path, str]) -> BinarySegmentationDataset:
     return BinarySegmentationDataset(
         path,
-        get_val_test_transforms(
-            config["dataset"]["image"]["height"], config["dataset"]["image"]["width"]
-        ),
+        get_val_test_transforms(),
     )
