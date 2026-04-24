@@ -3,9 +3,10 @@ import shutil
 from pathlib import Path
 from typing import Optional, Callable, List, Tuple
 
-import cv2
 import yaml
 import json
+from tqdm import tqdm
+from PIL import Image
 from sklearn.model_selection import train_test_split
 
 from paths.ProjectPaths import ProjectPaths
@@ -114,10 +115,11 @@ def build_processed_dataset(
         return not image_stems.isdisjoint(mask_stems)
 
     def get_image_shape(image_path: Path):
-        image = cv2.imread(str(image_path))
-        if image is None:
+        try:
+            with Image.open(image_path) as img:
+                return img.height, img.width
+        except Exception as ex:
             return None
-        return image.shape[0], image.shape[1]
 
     try:
         logger.info("Data structure recognition...")
@@ -176,7 +178,7 @@ def build_processed_dataset(
         def save_manifest(data: List[Tuple[Path, Path, str]], filepath: Path):
             manifest = []
             skipped = 0
-            for d in data:
+            for d in tqdm(data, desc=f"Saving {filepath.name}", leave=True):
                 image_path, mask_path, source = d
                 resolution = get_image_shape(image_path)
                 if resolution is None:
