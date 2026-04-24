@@ -114,9 +114,9 @@ def build_processed_dataset(
         return not image_stems.isdisjoint(mask_stems)
 
     def get_image_shape(image_path: Path):
-        image = cv2.imread(image_path)
+        image = cv2.imread(str(image_path))
         if image is None:
-            raise FileNotFoundError(path)
+            return None
         return image.shape[0], image.shape[1]
 
     try:
@@ -175,14 +175,21 @@ def build_processed_dataset(
 
         def save_manifest(data: List[Tuple[Path, Path, str]], filepath: Path):
             manifest = []
+            skipped = 0
             for d in data:
                 image_path, mask_path, source = d
+                resolution = get_image_shape(image_path)
+                if resolution is None:
+                    skipped += 1
+                    continue
                 manifest.append({
                     "image": str(image_path.resolve()),
                     "mask": str(mask_path.resolve()),
                     "source": source,
-                    "resolution": get_image_shape(image_path),
+                    "resolution": resolution,
                 })
+            if skipped > 0:
+                logger.warning(f"Skipped {skipped} pairs due to image read errors in {filepath}")
             with open(filepath, 'w', encoding='utf-8') as f:
                 json.dump(manifest, f, indent=2, ensure_ascii=False)
 
