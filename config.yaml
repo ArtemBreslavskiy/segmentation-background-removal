@@ -41,9 +41,14 @@ dataloader:
 learning:
   epochs: 100
   early_stopping_patience: 15
-  accumulation_steps: 4
+  accumulation_steps: 1
+  use_pixels_accumulation: True
+  pixels_per_step: 3e6
   use_fp16: True
   use_gradient_checkpointing: True
+  compile_model: true
+  compile_dynamic: true
+  compile_options: 'default'
   log_interval: 5
   save_criterion: 'val/iou'
   mode: 'max'

@@ -50,6 +50,14 @@ class BaseModule(ABC):
             self.model_name = model_name
         else:
             self.model_name = self.config["model"].get("model_name", "model")
+        if self.config["learning"].get("compile_model", False):
+            compile_dynamic = self.config["learning"].get("compile_dynamic", True)
+            compile_options = self.config["learning"].get("compile_options", "default")
+            self.model = torch.compile(
+                self.model,
+                dynamic=compile_dynamic,
+                mode=compile_options
+            )
 
     def _device_validate(self, device: Union[torch.device, str, None]):
         if device is None:
@@ -207,17 +215,21 @@ class BaseModule(ABC):
         num_batches = 0
         self._reset_metrics(current_metrics)
 
+        use_pixels_accumulation = self.config["learning"].get("samples_per_step", 0) > 0
+        pixels_per_step = self.config["learning"].get("pixels_per_step", 0)
         accumulation_steps = self.config["learning"].get("accumulation_steps", 1)
-        if accumulation_steps < 1:
-            error_msg = "accumulation_steps cannot be less than 1"
-            self.logger.exception(error_msg)
-            raise ValueError(error_msg)
+        if use_pixels_accumulation and pixels_per_step <= 0:
+            raise ValueError("pixels_per_step must be > 0 when enabled")
+        if use_pixels_accumulation:
+            accumulation_steps = 1
+
+        if pixels_per_step:
+            accumulated_pixels = 0
 
         if self.has_components:
             total_components = {name: 0.0 for name in self.loss_function.names}
         else:
             total_components = {"loss": 0.0}
-
         desc = (
             "Evaluating..."
             if mode == "test"
@@ -232,6 +244,7 @@ class BaseModule(ABC):
                 try:
                     batch = self._move_batch_to_device(batch)
                     x, y = self._unpack_batch(batch)
+                    num_pixels = x.shape[0] * x.shape[2] * x.shape[3]
 
                     with autocast(self.config["learning"].get("use_fp16", False)):
                         predictions = self.model(x)
@@ -239,25 +252,36 @@ class BaseModule(ABC):
                             predictions, y, return_components=True
                         )
 
-                    full_loss = loss.item()
-
                     if train:
-                        loss = loss / accumulation_steps
-                        self.scaler.scale(loss).backward()
-                        if (num_batches + 1) % accumulation_steps == 0:
-                            self.scaler.step(self.optimizer)
-                            self.scaler.update()
-                            self.optimizer.zero_grad()
+                        if use_pixels_accumulation:
+                            scaled_loss = loss * num_pixels
+                            self.scaler.scale(scaled_loss).backward()
+                            accumulated_pixels += num_pixels
+                            if accumulated_pixels >= pixels_per_step:
+                                for param in self.model.parameters():
+                                    if param.grad is not None:
+                                        param.grad /= accumulated_pixels
+                                self.scaler.step(self.optimizer)
+                                self.scaler.update()
+                                self.optimizer.zero_grad()
+                                accumulated_pixels = 0
+                        else:
+                            loss = loss / accumulation_steps
+                            self.scaler.scale(loss).backward()
+                            if (num_batches + 1) % accumulation_steps == 0:
+                                self.scaler.step(self.optimizer)
+                                self.scaler.update()
+                                self.optimizer.zero_grad()
 
                     self._update_metrics(predictions, y, current_metrics)
-                    total_loss += full_loss
+                    total_loss += loss.item()
                     num_batches += 1
                     for name in total_components.keys():
                         total_components[name] += components[name].item()
 
                     pbar.set_postfix(
                         {
-                            "loss": f"{full_loss:.4f}",
+                            "loss": f"{loss.item():.4f}",
                             "speed": (
                                 f"{num_batches / (time.time() - start_time):.1f} it/s"
                                 if num_batches > 0
@@ -269,18 +293,24 @@ class BaseModule(ABC):
                     self.logger.exception(f"Error in {mode} batch {num_batches}: {ex}")
                     if mode == "train":
                         self.logger.warning(f"Skipping train batch {num_batches}")
-                        try:
-                            torch.cuda.empty_cache()
-                        except Exception as ex:
-                            self.logger.warning(ex)
-                            pass
+                        torch.cuda.empty_cache()
                         self.optimizer.zero_grad()
+                        if use_pixels_accumulation:
+                            accumulated_pixels = 0
                         continue
                     else:
                         raise
 
-            if train and num_batches % accumulation_steps != 0:
-                self.optimizer.step()
+            if train and use_pixels_accumulation and accumulated_pixels > 0:
+                for param in self.model.parameters():
+                    if param.grad is not None:
+                        param.grad /= accumulated_pixels
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+                self.optimizer.zero_grad()
+            elif train and not use_pixels_accumulation and num_batches % accumulation_steps != 0:
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
                 self.optimizer.zero_grad()
 
         if num_batches == 0:
