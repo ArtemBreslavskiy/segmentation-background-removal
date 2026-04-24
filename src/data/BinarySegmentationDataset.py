@@ -29,9 +29,6 @@ class BinarySegmentationDataset(data.Dataset):
         self.sources = [item.get('source', 'unknown') for item in manifest]
         self.length = len(self.images)
 
-        for i in range(len(self.masks)):
-            self.masks[i]
-
     def __getitem__(self, idx):
         path_image = self.images[idx]
         path_mask = self.masks[idx]

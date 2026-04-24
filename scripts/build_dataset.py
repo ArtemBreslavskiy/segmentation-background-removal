@@ -3,6 +3,7 @@ import shutil
 from pathlib import Path
 from typing import Optional, Callable, List, Tuple
 
+import cv2
 import yaml
 import json
 from sklearn.model_selection import train_test_split
@@ -112,6 +113,12 @@ def build_processed_dataset(
                       if p.is_file() and p.suffix.lower() in {'.jpg', '.jpeg', '.png'}}
         return not image_stems.isdisjoint(mask_stems)
 
+    def get_image_shape(image_path: Path):
+        image = cv2.imread(image_path)
+        if image is None:
+            raise FileNotFoundError(path)
+        return image.shape[0], image.shape[1]
+
     try:
         logger.info("Data structure recognition...")
         datasets = {}
@@ -173,7 +180,9 @@ def build_processed_dataset(
                 manifest.append({
                     "image": str(image_path.resolve()),
                     "mask": str(mask_path.resolve()),
-                    "source": source})
+                    "source": source,
+                    "resolution": get_image_shape(image_path),
+                })
             with open(filepath, 'w', encoding='utf-8') as f:
                 json.dump(manifest, f, indent=2, ensure_ascii=False)
 
