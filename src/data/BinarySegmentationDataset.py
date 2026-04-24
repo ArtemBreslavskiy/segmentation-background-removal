@@ -84,7 +84,7 @@ class BinarySegmentationDataset(data.Dataset):
         if mask.dim() == 2:
             mask = mask.unsqueeze(0)
 
-        return {"image": image, "mask": mask, "source": source}
+        return image, mask
 
     def __len__(self):
         return self.length

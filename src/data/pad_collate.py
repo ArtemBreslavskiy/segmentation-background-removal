@@ -1,25 +1,24 @@
 import torch
-from typing import List, Dict, Any
+import numpy as np
+from typing import List, Union, Tuple
 
 
-def pad_collate(batch: List[Dict[str, Any]], alignment: int = 32, pad_value: float = 0.0) -> Dict[str, Any]:
+def pad_collate(batch: List[Tuple[Union[torch.Tensor, np.ndarray]]], alignment: int = 32, pad_value: float = 0.0) -> Tuple[torch.Tensor, torch.Tensor]:
+    max_h, max_w = 0, 0
     images = []
     masks = []
-    sources = []
-    max_h, max_w = 0, 0
 
     for sample in batch:
-        image = sample['image']
+        image = sample[0]
         if isinstance(image, torch.Tensor):
             image = image.float()
         else:
             image = torch.from_numpy(image).permute(2, 0, 1).float()
-        _, h, w = image.shape
+        h, w = image.shape[-2], image.shape[-1]
         max_h = max(max_h, h)
         max_w = max(max_w, w)
         images.append(image)
-        masks.append(sample.get('mask'))
-        sources.append(sample.get('source', 'unknown'))
+        masks.append(sample[1])
 
     if alignment > 1:
         max_h = ((max_h + alignment - 1) // alignment) * alignment
@@ -50,8 +49,4 @@ def pad_collate(batch: List[Dict[str, Any]], alignment: int = 32, pad_value: flo
         else:
             padded_masks.append(torch.zeros((1, max_h, max_w), dtype=torch.float32))
 
-    return {
-        'image': torch.stack(padded_images, dim=0),
-        'mask': torch.stack(padded_masks, dim=0),
-        'source': sources
-    }
+    return (torch.stack(padded_images, dim=0), torch.stack(padded_masks, dim=0))
