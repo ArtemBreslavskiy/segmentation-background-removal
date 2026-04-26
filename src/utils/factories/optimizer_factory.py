@@ -1,6 +1,8 @@
-import torch.nn as nn
 from typing import Dict
-from src.utils.factories.factory_utils import get_class, convert_value
+
+import torch.nn as nn
+
+from src.utils.factories.factory_utils import convert_value, get_class
 
 
 def create_optimizer(config: Dict, model: nn.Module):

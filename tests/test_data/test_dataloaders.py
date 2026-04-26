@@ -2,7 +2,6 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import torch
-
 from data.dataloaders import (
     get_dataloader,
     get_test_dataloader,

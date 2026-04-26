@@ -1,29 +1,28 @@
+import json
 import logging
-from typing import Optional
-from functools import partial
+import re
+from typing import Dict, Optional
 
 import torch
 import yaml
-import json
-import re
 
 from ProjectPaths import ProjectPaths
-from src.data.pad_collate import pad_collate
 from src.engine.Trainer import Trainer
 from src.logs.logger_setup import configure_loggers
-from src.utils.sleep_utils import prevent_sleep, allow_sleep
 from src.utils.factories.dataloader_factory import (
     create_train_dataloader_with_weighted_dynamic_bucket_batch_sampler,
-    create_val_dataloader_with_weighted_dynamic_bucket_batch_sampler
+    create_val_dataloader_with_weighted_dynamic_bucket_batch_sampler,
 )
 from src.utils.factories.loss_fn_factory import create_loss
 from src.utils.factories.metrics_factory import create_metrics
 from src.utils.factories.model_factory import create_model
 from src.utils.factories.optimizer_factory import create_optimizer
 from src.utils.factories.scheduler_factory import create_scheduler
+from src.utils.sleep_utils import allow_sleep, prevent_sleep
+from src.utils.weighted_dynamic_bucket_batch_sampler_utils import get_padding_fn
 
 
-def train(logger: Optional[logging.Logger] = None):
+def train(config: Dict, logger: Optional[logging.Logger] = None):
     if logger is None:
         logger = logging.getLogger(__name__)
 
@@ -32,14 +31,27 @@ def train(logger: Optional[logging.Logger] = None):
     logger.info("=" * 60)
 
     path = ProjectPaths()
-    logger.info("Loading configuration from: %s", path.CONFIG)
-    with open(path.CONFIG) as f:
-        config = yaml.safe_load(f)
     with open(path.TRAIN) as f:
         train_manifest = json.load(f)
     with open(path.VAL) as f:
         val_manifest = json.load(f)
-    logger.debug("Configuration loaded successfully")
+    logger.debug("Manifest loaded successfully")
+
+    model_name = config["model"]["model_name"]
+    log_dir = path.SAVED_CHECKPOINTS
+    device = (
+        "cuda"
+        if config["learning"]["use_cuda"] and torch.cuda.is_available()
+        else "cpu"
+    )
+    logger.info("Using device: %s", device)
+    if device == "cuda":
+        logger.info("GPU: %s", torch.cuda.get_device_name(0))
+        logger.info(
+            "GPU Memory: %.2f GB",
+            torch.cuda.get_device_properties(0).total_memory / 1e9,
+        )
+    logger.info("Model name: %s", model_name)
 
     logger.info("Creating model components...")
 
@@ -60,44 +72,16 @@ def train(logger: Optional[logging.Logger] = None):
         "Learning rate scheduler created: %s", config["learning"]["scheduler"]["class"]
     )
 
-    if config["dataloader"]["pad_collate"]["enabled"]:
-        collate_fn = partial(
-            pad_collate,
-            alignment=config["dataloader"]["pad_collate"]["alignment"],
-            pad_value=config["dataloader"]["pad_collate"]["pad_value"])
-    else:
-        collate_fn = None
+    collate_fn = get_padding_fn(config)
 
     train_loader = create_train_dataloader_with_weighted_dynamic_bucket_batch_sampler(
-        config=config,
-        manifest=train_manifest,
-        collate_fn=collate_fn,
-        shuffle=True
+        config=config, manifest=train_manifest, collate_fn=collate_fn, shuffle=True
     )
     logger.info("Train dataloader created")
     val_loader = create_val_dataloader_with_weighted_dynamic_bucket_batch_sampler(
-        config=config,
-        manifest=val_manifest,
-        collate_fn=collate_fn,
-        shuffle=False
+        config=config, manifest=val_manifest, collate_fn=collate_fn, shuffle=False
     )
     logger.info("Val dataloader created")
-
-    device = (
-        "cuda"
-        if config["learning"]["use_cuda"] and torch.cuda.is_available()
-        else "cpu"
-    )
-    logger.info("Using device: %s", device)
-    if device == "cuda":
-        logger.info("GPU: %s", torch.cuda.get_device_name(0))
-        logger.info(
-            "GPU Memory: %.2f GB",
-            torch.cuda.get_device_properties(0).total_memory / 1e9,
-        )
-
-    model_name = config["model"]["model_name"]
-    log_dir = path.SAVED_CHECKPOINTS
 
     logger.info("Initializing Trainer...")
     try:
@@ -203,4 +187,4 @@ if __name__ == "__main__":
     except RuntimeError as ex:
         logger.debug("Multiprocessing start method already set: %s", ex)
 
-    train(logger=logger)
+    train(config=config, logger=logger)

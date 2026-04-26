@@ -70,6 +70,12 @@ class Trainer(BaseModule):
         early_stopping_patience: Optional[int] = None,
         log_interval: int = 1,
     ):
+        remaining_epochs = epochs - self.current_epoch
+        if remaining_epochs < 1:
+            raise ValueError(
+                f"No epochs left to train: total_epochs={epochs + self.current_epoch}, "
+                f"current_epoch={self.current_epoch}"
+            )
         if len(train_dataloader) == 0:
             error_msg = "Train dataloader is empty"
             self.logger.exception(error_msg)
@@ -108,7 +114,7 @@ class Trainer(BaseModule):
             def is_better(current, best):
                 return current > best
 
-        for _ in range(epochs):
+        for _ in range(remaining_epochs):
             self.current_epoch += 1
             train_metrics = self.train_epoch(train_dataloader)
 

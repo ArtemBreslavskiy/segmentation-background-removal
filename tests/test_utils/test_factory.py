@@ -1,7 +1,6 @@
 from unittest.mock import ANY, MagicMock, patch
 
 import pytest
-
 from src.utils.visualization.factory import (
     _convert_value,
     _get_class,

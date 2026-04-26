@@ -17,4 +17,3 @@ class ProjectPaths:
     TRAIN: Path = PROCESSED_DATA / "train.json"
     VAL: Path = PROCESSED_DATA / "val.json"
     TEST: Path = PROCESSED_DATA / "test.json"
-

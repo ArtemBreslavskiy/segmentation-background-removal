@@ -1,10 +1,10 @@
 import json
 from pathlib import Path
-from typing import Union, List, Optional, Dict
+from typing import Dict, List, Optional, Union
 
+from ProjectPaths import ProjectPaths
 from src.data.BinarySegmentationDataset import BinarySegmentationDataset
 from src.data.transforms import get_train_transforms, get_val_test_transforms
-from ProjectPaths import ProjectPaths
 
 
 def create_dataset(
@@ -28,11 +28,13 @@ def create_dataset(
 
     if not manifest:
         if json_path:
-            with open(json_path, 'r', encoding='utf-8') as f:
+            with open(json_path, "r", encoding="utf-8") as f:
                 manifest = json.load(f)
         else:
             raise ValueError("Either json_path or manifest must be provided")
-    transforms = get_train_transforms() if mode == "train" else get_val_test_transforms()
+    transforms = (
+        get_train_transforms() if mode == "train" else get_val_test_transforms()
+    )
     dataset_config = config["dataset"]
 
     return BinarySegmentationDataset(
@@ -43,13 +45,19 @@ def create_dataset(
     )
 
 
-def create_train_dataset(config: Dict, json_path: Optional[Union[str, Path]]) -> BinarySegmentationDataset:
+def create_train_dataset(
+    config: Dict, json_path: Optional[Union[str, Path]]
+) -> BinarySegmentationDataset:
     return create_dataset(config=config, mode="train", json_path=json_path)
 
 
-def create_test_dataset(config: Dict, json_path: Optional[Union[str, Path]]) -> BinarySegmentationDataset:
+def create_test_dataset(
+    config: Dict, json_path: Optional[Union[str, Path]]
+) -> BinarySegmentationDataset:
     return create_dataset(config=config, mode="test", json_path=json_path)
 
 
-def create_val_dataset(config: Dict, json_path: Optional[Union[str, Path]]) -> BinarySegmentationDataset:
+def create_val_dataset(
+    config: Dict, json_path: Optional[Union[str, Path]]
+) -> BinarySegmentationDataset:
     return create_dataset(config=config, mode="val", json_path=json_path)

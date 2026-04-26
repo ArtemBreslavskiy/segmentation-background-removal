@@ -1,6 +1,6 @@
-from pathlib import Path
 import json
-from typing import Dict, Optional, Union, List
+from pathlib import Path
+from typing import Dict, List, Optional, Union
 
 import albumentations as A
 import cv2
@@ -16,26 +16,28 @@ class BinarySegmentationDataset(data.Dataset):
         manifest: Optional[List[Dict]] = None,
         transforms: Optional[Union[A.Compose, Dict[str, A.Compose]]] = None,
         max_area: int = 0,
-        resize_mode: str = 'resize'
+        resize_mode: str = "resize",
     ):
         resize_mode = resize_mode.lower()
-        resize_modes = ['resize', 'crop']
+        resize_modes = ["resize", "crop"]
         if resize_mode not in resize_modes:
-            raise ValueError(f"Unknown mode: {resize_mode}. Available mods: {resize_modes}")
+            raise ValueError(
+                f"Unknown mode: {resize_mode}. Available mods: {resize_modes}"
+            )
         if not manifest:
             if json_path:
-                with open(json_path, 'r', encoding='utf-8') as f:
+                with open(json_path, "r", encoding="utf-8") as f:
                     manifest = json.load(f)
             else:
                 raise ValueError("Either json_path or manifest must be provided")
 
         self.transforms = transforms
-        self.images = [Path(item['image']) for item in manifest]
-        self.masks = [Path(item['mask']) for item in manifest]
+        self.images = [Path(item["image"]) for item in manifest]
+        self.masks = [Path(item["mask"]) for item in manifest]
         self.max_area = max_area
         self.resize_mode = resize_mode
         if self.max_area > 0:
-            self.areas = [item.get('area', 0) for item in manifest]
+            self.areas = [item.get("area", 0) for item in manifest]
         self.length = len(self.images)
 
     def __getitem__(self, idx):
@@ -58,10 +60,14 @@ class BinarySegmentationDataset(data.Dataset):
                 scale = np.sqrt(self.max_area / (h * w))
                 new_h = int(h * scale)
                 new_w = int(w * scale)
-                if self.resize_mode == 'resize':
-                    image = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
-                    mask = cv2.resize(mask, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
-                elif self.resize_mode == 'crop':
+                if self.resize_mode == "resize":
+                    image = cv2.resize(
+                        image, (new_w, new_h), interpolation=cv2.INTER_LINEAR
+                    )
+                    mask = cv2.resize(
+                        mask, (new_w, new_h), interpolation=cv2.INTER_NEAREST
+                    )
+                elif self.resize_mode == "crop":
                     crop = A.RandomCrop(height=new_h, width=new_w, p=1.0)
                     transformed = crop(image=image, mask=mask)
                     image = transformed["image"]

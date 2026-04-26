@@ -1,5 +1,6 @@
+import json
 import logging
-from typing import Optional
+from typing import Dict, Optional
 
 import torch
 import yaml
@@ -7,10 +8,14 @@ import yaml
 from ProjectPaths import ProjectPaths
 from src.engine.Tester import Tester
 from src.logs.logger_setup import configure_loggers
+from src.utils.factories.dataloader_factory import (
+    create_test_dataloader_with_weighted_dynamic_bucket_batch_sampler,
+)
 from src.utils.factories.metrics_factory import create_metrics
+from src.utils.weighted_dynamic_bucket_batch_sampler_utils import get_padding_fn
 
 
-def evaluate(logger: Optional[logging.Logger] = None):
+def evaluate(config: Dict, logger: Optional[logging.Logger] = None):
     if logger is None:
         logger = logging.getLogger(__name__)
 
@@ -19,11 +24,9 @@ def evaluate(logger: Optional[logging.Logger] = None):
     logger.info("=" * 60)
 
     path = ProjectPaths()
-    logger.info("Loading configuration from: %s", path.CONFIG)
-
-    with open(path.CONFIG) as f:
-        config = yaml.safe_load(f)
-    logger.debug("Configuration loaded successfully")
+    with open(path.TEST) as f:
+        test_manifest = json.load(f)
+    logger.debug("Manifest loaded successfully")
 
     model_name = config["model"]["model_name"]
     saved_path = path.SAVED_CHECKPOINTS / f"{model_name}_best.pt"
@@ -33,8 +36,13 @@ def evaluate(logger: Optional[logging.Logger] = None):
         if config["learning"]["use_cuda"] and torch.cuda.is_available()
         else "cpu"
     )
-
     logger.info("Using device: %s", device)
+    if device == "cuda":
+        logger.info("GPU: %s", torch.cuda.get_device_name(0))
+        logger.info(
+            "GPU Memory: %.2f GB",
+            torch.cuda.get_device_properties(0).total_memory / 1e9,
+        )
     logger.info("Model name: %s", model_name)
     logger.info("Checkpoint path: %s", saved_path)
 
@@ -53,16 +61,17 @@ def evaluate(logger: Optional[logging.Logger] = None):
     logger.info("Starting evaluation on test dataset...")
 
     try:
-        dataloader = get_test_dataloader(config, path)
-        logger.info(
-            "Test dataloader created with batch size: %d",
-            config["dataloader"]["batch_sizes"]["test"],
+        collate_fn = get_padding_fn(config)
+
+        val_loader = create_test_dataloader_with_weighted_dynamic_bucket_batch_sampler(
+            config=config, manifest=test_manifest, collate_fn=collate_fn, shuffle=False
         )
+        logger.info("Test dataloader created")
 
         metrics = create_metrics(config)
         logger.info("Metrics initialized: %s", list(metrics.keys()))
 
-        data = tester.evaluate(dataloader=dataloader, metrics=metrics)
+        data = tester.evaluate(dataloader=val_loader, metrics=metrics)
 
         logger.info("=" * 60)
         logger.info("TEST METRICS RESULTS")
@@ -86,4 +95,6 @@ if __name__ == "__main__":
         config = yaml.safe_load(f)
 
     configure_loggers(path.CONFIG, path.LOGS)
-    evaluate(logger=get_logger(config["logs"]["types"]["evaluate"]["name"]))
+    logger = get_logger(config["logs"]["types"]["evaluate"]["name"])
+
+    evaluate(config=config, logger=logger)

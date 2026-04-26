@@ -1,9 +1,14 @@
-import torch
+from typing import List, Tuple, Union
+
 import numpy as np
-from typing import List, Union, Tuple
+import torch
 
 
-def pad_collate(batch: List[Tuple[Union[torch.Tensor, np.ndarray]]], alignment: int = 32, pad_value: float = 0.0) -> Tuple[torch.Tensor, torch.Tensor]:
+def pad_collate(
+    batch: List[Tuple[Union[torch.Tensor, np.ndarray]]],
+    alignment: int = 32,
+    pad_value: float = 0.0,
+) -> Tuple[torch.Tensor, torch.Tensor]:
     max_h, max_w = 0, 0
     images = []
     masks = []
@@ -29,7 +34,9 @@ def pad_collate(batch: List[Tuple[Union[torch.Tensor, np.ndarray]]], alignment: 
         h, w = image.shape[-2], image.shape[-1]
         pad_h = max_h - h
         pad_w = max_w - w
-        image_pad = torch.nn.functional.pad(image, (0, pad_w, 0, pad_h), value=pad_value)
+        image_pad = torch.nn.functional.pad(
+            image, (0, pad_w, 0, pad_h), value=pad_value
+        )
         padded_images.append(image_pad)
 
         if mask is not None:
@@ -44,7 +51,9 @@ def pad_collate(batch: List[Tuple[Union[torch.Tensor, np.ndarray]]], alignment: 
             h, w = mask.shape[-2], mask.shape[-1]
             pad_h = max_h - h
             pad_w = max_w - w
-            mask_pad = torch.nn.functional.pad(mask, (0, pad_w, 0, pad_h), value=pad_value)
+            mask_pad = torch.nn.functional.pad(
+                mask, (0, pad_w, 0, pad_h), value=pad_value
+            )
             padded_masks.append(mask_pad)
         else:
             padded_masks.append(torch.zeros((1, max_h, max_w), dtype=torch.float32))

@@ -1,7 +1,8 @@
-import numpy as np
 import warnings
-from torch.utils.data import WeightedRandomSampler
 from typing import List
+
+import numpy as np
+from torch.utils.data import WeightedRandomSampler
 
 
 class WeightedDynamicBucketBatchSampler(WeightedRandomSampler):
@@ -17,7 +18,7 @@ class WeightedDynamicBucketBatchSampler(WeightedRandomSampler):
         reference_area: int = 512**2,
         replacement: bool = False,
         skip_overload_examples: bool = True,
-        send_overload_report: bool = True
+        send_overload_report: bool = True,
     ):
         if base_batch_size < 1:
             raise ValueError("base_batch_size must be >= 1")
@@ -32,7 +33,9 @@ class WeightedDynamicBucketBatchSampler(WeightedRandomSampler):
         if len(weights) == 0:
             raise ValueError("Empty dataset is not allowed")
         if not len(weights) == len(dataset_areas) == len(dataset_aspect_ratios):
-            raise ValueError("The length of the weights, dataset_areas, and dataset_aspect_ratio lists does not match")
+            raise ValueError(
+                "The length of the weights, dataset_areas, and dataset_aspect_ratio lists does not match"
+            )
 
         super().__init__(weights, len(weights), replacement=replacement)
         self.dataset_areas = np.array(dataset_areas)
@@ -69,17 +72,23 @@ class WeightedDynamicBucketBatchSampler(WeightedRandomSampler):
                     if len(batch) == 0:
                         if self.skip_overload_examples:
                             if self.send_overload_report:
-                                warnings.warn(f"An sample with area {areas[i]}"
-                                              f" exceeding max_load {max_load} is skipped, even for a batch size of 1")
+                                warnings.warn(
+                                    f"An sample with area {areas[i]}"
+                                    f" exceeding max_load {max_load} is skipped, even for a batch size of 1"
+                                )
                             i += 1
                             missing += 1
                             continue
                         elif self.send_overload_report:
-                            warnings.warn(f"An sample was found that exceeds the limits"
-                                          f" even with a batch size of 1 {areas[i]} > {max_load}")
+                            warnings.warn(
+                                f"An sample was found that exceeds the limits"
+                                f" even with a batch size of 1 {areas[i]} > {max_load}"
+                            )
                     elif len(batch) < self.min_batch_size:
-                        warnings.warn(f"The minimum size batch exceeded the limits, min_batch_size:"
-                                      f" {self.min_batch_size}")
+                        warnings.warn(
+                            f"The minimum size batch exceeded the limits, min_batch_size:"
+                            f" {self.min_batch_size}"
+                        )
                     else:
                         break
                 current_load += areas[i]
@@ -96,4 +105,6 @@ class WeightedDynamicBucketBatchSampler(WeightedRandomSampler):
             yield b
 
     def __len__(self):
-        raise NotImplementedError("Number of batches depends on data distribution and cannot be computed in advance")
+        raise NotImplementedError(
+            "Number of batches depends on data distribution and cannot be computed in advance"
+        )

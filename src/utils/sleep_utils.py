@@ -1,6 +1,6 @@
-import platform
 import ctypes
 import logging
+import platform
 
 
 def prevent_sleep(logger: logging.Logger):

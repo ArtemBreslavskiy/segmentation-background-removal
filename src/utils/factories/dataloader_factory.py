@@ -1,16 +1,23 @@
-import random
 import json
-from typing import List, Dict, Union, Optional, Callable
+import random
 from pathlib import Path
+from typing import Callable, Dict, List, Optional, Union
 
 import numpy as np
 import torch
 import torch.utils.data as data
 
-from src.utils.weighted_dynamic_bucket_batch_sampler_utils import get_sample_weight, get_area_and_aspect_ratio
-from src.utils.factories.dataset_factory import create_train_dataset, create_test_dataset, create_val_dataset
-from src.utils.factories.batch_sampler_factory import create_batch_sampler
 from ProjectPaths import ProjectPaths
+from src.utils.factories.batch_sampler_factory import create_batch_sampler
+from src.utils.factories.dataset_factory import (
+    create_test_dataset,
+    create_train_dataset,
+    create_val_dataset,
+)
+from src.utils.weighted_dynamic_bucket_batch_sampler_utils import (
+    get_area_and_aspect_ratio,
+    get_sample_weight,
+)
 
 
 def seed_worker(worker_id):
@@ -25,7 +32,7 @@ def create_dataloader(
     json_path: Optional[Union[ProjectPaths, str, Path]] = None,
     manifest: Optional[List[Dict]] = None,
     batch_sampler: Optional[data.BatchSampler] = None,
-    collate_fn: Optional[Callable] = None
+    collate_fn: Optional[Callable] = None,
 ) -> data.DataLoader:
     mode = mode.lower()
     correct_modes = ["train", "test", "val"]
@@ -42,7 +49,7 @@ def create_dataloader(
 
     if not manifest:
         if json_path:
-            with open(json_path, 'r', encoding='utf-8') as f:
+            with open(json_path, "r", encoding="utf-8") as f:
                 manifest = json.load(f)
         else:
             raise ValueError("Either json_path or manifest must be provided")
@@ -55,11 +62,17 @@ def create_dataloader(
 
     if batch_sampler is not None:
         if batch_size is not None or shuffle is not None:
-            raise ValueError("When batch_sampler is provided, batch_size and shuffle must be None/null in config.")
+            raise ValueError(
+                "When batch_sampler is provided, batch_size and shuffle must be None/null in config."
+            )
     elif batch_size is None:
-        raise ValueError("batch_size must be set in config when batch_sampler is not used.")
+        raise ValueError(
+            "batch_size must be set in config when batch_sampler is not used."
+        )
     elif shuffle is None:
-        raise ValueError("shuffle must be set in config when batch_sampler is not used.")
+        raise ValueError(
+            "shuffle must be set in config when batch_sampler is not used."
+        )
 
     if mode == "train":
         dataset = create_train_dataset(config, manifest=manifest)
@@ -104,7 +117,7 @@ def create_train_dataloader(
     json_path: Optional[Union[ProjectPaths, str, Path]] = None,
     manifest: Optional[List[Dict]] = None,
     batch_sampler: Optional[data.BatchSampler] = None,
-    collate_fn: Optional[Callable] = None
+    collate_fn: Optional[Callable] = None,
 ) -> data.DataLoader:
     return create_dataloader(
         config=config,
@@ -112,7 +125,7 @@ def create_train_dataloader(
         manifest=manifest,
         mode="train",
         batch_sampler=batch_sampler,
-        collate_fn=collate_fn
+        collate_fn=collate_fn,
     )
 
 
@@ -121,7 +134,7 @@ def create_test_dataloader(
     json_path: Optional[Union[ProjectPaths, str, Path]] = None,
     manifest: Optional[List[Dict]] = None,
     batch_sampler: Optional[data.BatchSampler] = None,
-    collate_fn: Optional[Callable] = None
+    collate_fn: Optional[Callable] = None,
 ) -> data.DataLoader:
     return create_dataloader(
         config=config,
@@ -129,7 +142,7 @@ def create_test_dataloader(
         manifest=manifest,
         mode="test",
         batch_sampler=batch_sampler,
-        collate_fn=collate_fn
+        collate_fn=collate_fn,
     )
 
 
@@ -138,7 +151,7 @@ def create_val_dataloader(
     json_path: Optional[Union[ProjectPaths, str, Path]] = None,
     manifest: Optional[List[Dict]] = None,
     batch_sampler: Optional[data.BatchSampler] = None,
-    collate_fn: Optional[Callable] = None
+    collate_fn: Optional[Callable] = None,
 ) -> data.DataLoader:
     return create_dataloader(
         config=config,
@@ -146,7 +159,7 @@ def create_val_dataloader(
         manifest=manifest,
         mode="val",
         batch_sampler=batch_sampler,
-        collate_fn=collate_fn
+        collate_fn=collate_fn,
     )
 
 
@@ -176,9 +189,14 @@ def create_dataloader_with_weighted_dynamic_bucket_batch_sampler(
         weights=weights,
         dataset_areas=dataset_areas,
         dataset_aspect_ratios=dataset_aspect_ratios,
-        shuffle=shuffle
+        shuffle=shuffle,
     )
-    loader_kwargs = {"mode": mode, "config": config, "manifest": manifest, "batch_sampler": batch_sampler}
+    loader_kwargs = {
+        "mode": mode,
+        "config": config,
+        "manifest": manifest,
+        "batch_sampler": batch_sampler,
+    }
     if collate_fn is not None:
         loader_kwargs["collate_fn"] = collate_fn
     return create_dataloader(**loader_kwargs)
@@ -192,10 +210,10 @@ def create_train_dataloader_with_weighted_dynamic_bucket_batch_sampler(
 ) -> data.DataLoader:
     return create_dataloader_with_weighted_dynamic_bucket_batch_sampler(
         config=config,
-        mode='train',
+        mode="train",
         manifest=manifest,
         collate_fn=collate_fn,
-        shuffle=shuffle
+        shuffle=shuffle,
     )
 
 
@@ -207,10 +225,10 @@ def create_test_dataloader_with_weighted_dynamic_bucket_batch_sampler(
 ) -> data.DataLoader:
     return create_dataloader_with_weighted_dynamic_bucket_batch_sampler(
         config=config,
-        mode='test',
+        mode="test",
         manifest=manifest,
         collate_fn=collate_fn,
-        shuffle=shuffle
+        shuffle=shuffle,
     )
 
 
@@ -222,8 +240,8 @@ def create_val_dataloader_with_weighted_dynamic_bucket_batch_sampler(
 ) -> data.DataLoader:
     return create_dataloader_with_weighted_dynamic_bucket_batch_sampler(
         config=config,
-        mode='val',
+        mode="val",
         manifest=manifest,
         collate_fn=collate_fn,
-        shuffle=shuffle
+        shuffle=shuffle,
     )

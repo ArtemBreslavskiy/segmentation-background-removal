@@ -1,5 +1,6 @@
 from typing import Dict
-from src.utils.factories.factory_utils import get_class, convert_value
+
+from src.utils.factories.factory_utils import convert_value, get_class
 
 
 def create_loss(config: Dict):

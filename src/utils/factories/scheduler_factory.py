@@ -1,6 +1,8 @@
-import torch.optim as optim
 from typing import Dict
-from src.utils.factories.factory_utils import get_class, convert_value
+
+import torch.optim as optim
+
+from src.utils.factories.factory_utils import convert_value, get_class
 
 
 def create_scheduler(config: Dict, optimizer: optim.Optimizer):

@@ -1,21 +1,19 @@
+import json
 import logging
 import shutil
 from pathlib import Path
-from typing import Optional, Callable, List, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 import yaml
-import json
-from tqdm import tqdm
 from PIL import Image
 from sklearn.model_selection import train_test_split
+from tqdm import tqdm
 
 from ProjectPaths import ProjectPaths
 from src.logs.logger_setup import configure_loggers
 
 
-def build_processed_dataset(
-    logger: Optional[logging.Logger] = None,
-):
+def build_processed_dataset(config: Dict, logger: Optional[logging.Logger] = None):
     if logger is None:
         logger = logging.getLogger(__name__)
 
@@ -26,8 +24,6 @@ def build_processed_dataset(
     path = ProjectPaths()
     logger.info("Raw data path: %s", path.RAW_DATA)
     logger.info("Processed data path: %s", path.PROCESSED_DATA)
-    with open(path.CONFIG) as f:
-        config = yaml.safe_load(f)
 
     if not path.RAW_DATA.exists():
         error_msg = f"Raw data not found at: {path.RAW_DATA}"
@@ -60,7 +56,9 @@ def build_processed_dataset(
         msg = "The multi-dataset contains: " + ", ".join(datasets_names) + "."
     logger.info(msg)
 
-    def search_correct_directories(path: Path, criteria: Callable[[Path], bool]) -> List[Path]:
+    def search_correct_directories(
+        path: Path, criteria: Callable[[Path], bool]
+    ) -> List[Path]:
         if not path.is_dir():
             return []
         correct_directories = []
@@ -74,15 +72,27 @@ def build_processed_dataset(
 
     def image_directory_criteria(path: Path) -> bool:
         name = path.name.lower()
-        keywords = {'image', 'img', 'im', 'images', 'picture', 'photo', 'original'}
+        keywords = {"image", "img", "im", "images", "picture", "photo", "original"}
         return any(kw in name for kw in keywords)
 
     def mask_directory_criteria(path: Path) -> bool:
         name = path.name.lower()
         keywords = {
-            'mask', 'masks', 'matt', 'matte', 'label', 'labels',
-            'class', 'classes', 'object', 'gt', 'groundtruth',
-            'ground_truth', 'seg', 'segmentation', 'annotation'
+            "mask",
+            "masks",
+            "matt",
+            "matte",
+            "label",
+            "labels",
+            "class",
+            "classes",
+            "object",
+            "gt",
+            "groundtruth",
+            "ground_truth",
+            "seg",
+            "segmentation",
+            "annotation",
         }
         return any(kw in name for kw in keywords)
 
@@ -91,10 +101,18 @@ def build_processed_dataset(
         mask_dict = {}
         missing = 0
         for mask_path in mask_dir.rglob("*"):
-            if mask_path.is_file() and mask_path.suffix.lower() in {'.jpg', '.jpeg', '.png'}:
+            if mask_path.is_file() and mask_path.suffix.lower() in {
+                ".jpg",
+                ".jpeg",
+                ".png",
+            }:
                 mask_dict[mask_path.stem] = mask_path
         for image_path in image_dir.rglob("*"):
-            if image_path.is_file() and image_path.suffix.lower() in {'.jpg', '.jpeg', '.png'}:
+            if image_path.is_file() and image_path.suffix.lower() in {
+                ".jpg",
+                ".jpeg",
+                ".png",
+            }:
                 stem = image_path.stem
                 if stem in mask_dict:
                     mask_path = mask_dict[stem]
@@ -108,28 +126,39 @@ def build_processed_dataset(
         return pairs
 
     def validate_pair(image_dir: Path, mask_dir: Path) -> bool:
-        image_stems = {p.stem for p in image_dir.rglob("*")
-                       if p.is_file() and p.suffix.lower() in {'.jpg', '.jpeg', '.png'}}
-        mask_stems = {p.stem for p in mask_dir.rglob("*")
-                      if p.is_file() and p.suffix.lower() in {'.jpg', '.jpeg', '.png'}}
+        image_stems = {
+            p.stem
+            for p in image_dir.rglob("*")
+            if p.is_file() and p.suffix.lower() in {".jpg", ".jpeg", ".png"}
+        }
+        mask_stems = {
+            p.stem
+            for p in mask_dir.rglob("*")
+            if p.is_file() and p.suffix.lower() in {".jpg", ".jpeg", ".png"}
+        }
         return not image_stems.isdisjoint(mask_stems)
 
     def get_image_shape(image_path: Path):
         try:
             with Image.open(image_path) as img:
                 return img.height, img.width
-        except Exception as ex:
+        except Exception:
             return None
 
     try:
         logger.info("Data structure recognition...")
         datasets = {}
         for dataset_path in datasets_paths:
-            image_dirs = search_correct_directories(dataset_path, image_directory_criteria)
-            mask_dirs = search_correct_directories(dataset_path, mask_directory_criteria)
+            image_dirs = search_correct_directories(
+                dataset_path, image_directory_criteria
+            )
+            mask_dirs = search_correct_directories(
+                dataset_path, mask_directory_criteria
+            )
             if len(image_dirs) != len(mask_dirs):
                 logger.warning(
-                    f"Mismatch in {dataset_path.name}: {len(image_dirs)} image dirs vs {len(mask_dirs)} mask dirs. "
+                    f"Mismatch in {dataset_path.name}: {len(image_dirs)} "
+                    f"image dirs vs {len(mask_dirs)} mask dirs. "
                     f"Will pair only the first {min(len(image_dirs), len(mask_dirs))}."
                 )
             datasets[dataset_path.name] = []
@@ -142,16 +171,30 @@ def build_processed_dataset(
                             if file_pairs:
                                 datasets[dataset_path.name].extend(file_pairs)
                                 used_masks.add(mask_path)
-                                logger.info("%s + %s -> %d file pairs", image_path.name, mask_path.name, len(file_pairs))
+                                logger.info(
+                                    "%s + %s -> %d file pairs",
+                                    image_path.name,
+                                    mask_path.name,
+                                    len(file_pairs),
+                                )
                                 break
                         else:
-                            logger.debug(f"Skipped pair: {image_path.name} + {mask_path.name} (no common files)")
+                            logger.debug(
+                                f"Skipped pair: {image_path.name} + {mask_path.name} (no common files)"
+                            )
             if not datasets[dataset_path.name]:
-                logger.warning("No file pairs were built for dataset %s. Check directory structure and file names.", dataset_path.name)
+                logger.warning(
+                    "No file pairs were built for dataset %s. Check directory structure and file names.",
+                    dataset_path.name,
+                )
 
         for name, pairs in datasets.items():
             logger.debug("%s contains %d pairs", name, len(pairs))
-        data_paths_lst = [(image_path, mask_path, source) for source, pair in datasets.items() for image_path, mask_path in pair]
+        data_paths_lst = [
+            (image_path, mask_path, source)
+            for source, pair in datasets.items()
+            for image_path, mask_path in pair
+        ]
 
         logger.info("Splitting dataset into train/val...")
         random_seed = config["dataset"]["splits"]["seed"]
@@ -169,7 +212,7 @@ def build_processed_dataset(
         test_val_sources = [s for _, _, s in test_val]
         val, test = train_test_split(
             test_val,
-            test_size=test_ratio/test_val_ratio,
+            test_size=test_ratio / test_val_ratio,
             random_state=random_seed,
             stratify=test_val_sources,
         )
@@ -184,15 +227,19 @@ def build_processed_dataset(
                 if resolution is None:
                     skipped += 1
                     continue
-                manifest.append({
-                    "image": str(image_path.resolve()),
-                    "mask": str(mask_path.resolve()),
-                    "source": source,
-                    "resolution": resolution,
-                })
+                manifest.append(
+                    {
+                        "image": str(image_path.resolve()),
+                        "mask": str(mask_path.resolve()),
+                        "source": source,
+                        "resolution": resolution,
+                    }
+                )
             if skipped > 0:
-                logger.warning(f"Skipped {skipped} pairs due to image read errors in {filepath}")
-            with open(filepath, 'w', encoding='utf-8') as f:
+                logger.warning(
+                    f"Skipped {skipped} pairs due to image read errors in {filepath}"
+                )
+            with open(filepath, "w", encoding="utf-8") as f:
                 json.dump(manifest, f, indent=2, ensure_ascii=False)
 
         logger.info("Creating JSON files...")
@@ -208,10 +255,7 @@ def build_processed_dataset(
         logger.info("Train images: %d", len(train))
         logger.info("Validation images: %d", len(val))
         logger.info("Test images: %d", len(test))
-        logger.info(
-            "Total: %d",
-            len(train) + len(val) + len(test)
-        )
+        logger.info("Total: %d", len(train) + len(val) + len(test))
         logger.info("=" * 60)
 
     except Exception as ex:
@@ -227,4 +271,6 @@ if __name__ == "__main__":
         config = yaml.safe_load(f)
 
     configure_loggers(path.CONFIG, path.LOGS)
-    build_processed_dataset(logger=get_logger(config["logs"]["types"]["data"]["name"]))
+    logger = get_logger(config["logs"]["types"]["data"]["name"])
+
+    build_processed_dataset(config=config, logger=logger)

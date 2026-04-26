@@ -9,8 +9,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.utils.data as data
-from torch.cuda.amp import GradScaler, autocast
 import torchmetrics
+from torch.cuda.amp import GradScaler, autocast
 from tqdm import tqdm
 
 from src.losses.ComboLoss import ComboLoss
@@ -54,9 +54,7 @@ class BaseModule(ABC):
             compile_dynamic = self.config["learning"].get("compile_dynamic", True)
             compile_options = self.config["learning"].get("compile_options", "default")
             self.model = torch.compile(
-                self.model,
-                dynamic=compile_dynamic,
-                mode=compile_options
+                self.model, dynamic=compile_dynamic, mode=compile_options
             )
 
     def _device_validate(self, device: Union[torch.device, str, None]):
@@ -308,7 +306,11 @@ class BaseModule(ABC):
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
                 self.optimizer.zero_grad()
-            elif train and not use_pixels_accumulation and num_batches % accumulation_steps != 0:
+            elif (
+                train
+                and not use_pixels_accumulation
+                and num_batches % accumulation_steps != 0
+            ):
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
                 self.optimizer.zero_grad()

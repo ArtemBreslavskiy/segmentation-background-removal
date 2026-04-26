@@ -12,7 +12,7 @@ class DeepLabV3Plus(nn.Module):
         use_gradient_checkpointing: bool = False,
         group_norm_groups: int = 0,
         group_norm_eps: float = 1e-5,
-        group_norm_preserve_weights: bool = True
+        group_norm_preserve_weights: bool = True,
     ):
         if num_classes < 1:
             raise ValueError("num_classes must be >= 1")
@@ -41,22 +41,29 @@ class DeepLabV3Plus(nn.Module):
         )
 
         if group_norm_groups >= 1:
-            self._replace_bn_with_gn(self.model, group_norm_groups, group_norm_eps, group_norm_preserve_weights)
+            self._replace_bn_with_gn(
+                self.model,
+                group_norm_groups,
+                group_norm_eps,
+                group_norm_preserve_weights,
+            )
 
         if use_gradient_checkpointing:
-            if hasattr(self.model.encoder, 'set_grad_checkpointing'):
+            if hasattr(self.model.encoder, "set_grad_checkpointing"):
                 self.model.encoder.set_grad_checkpointing(True)
-            elif hasattr(self.model.encoder, 'gradient_checkpointing'):
+            elif hasattr(self.model.encoder, "gradient_checkpointing"):
                 self.model.encoder.gradient_checkpointing = True
             else:
-                print("Warning: Gradient checkpointing could not be enabled for this encoder.")
+                print(
+                    "Warning: Gradient checkpointing could not be enabled for this encoder."
+                )
 
     def _replace_bn_with_gn(
-            self,
-            module,
-            num_groups: int = 32,
-            eps: float = 1e-5,
-            preserve_weights: bool = True
+        self,
+        module,
+        num_groups: int = 32,
+        eps: float = 1e-5,
+        preserve_weights: bool = True,
     ):
         for name, child in module.named_children():
             if isinstance(child, nn.BatchNorm2d):
