@@ -2,7 +2,7 @@ from typing import Dict
 from src.utils.factories.factory_utils import get_class, convert_value
 
 
-def get_batch_sampler(
+def create_batch_sampler(
     config: Dict,
     **override_kwargs
 ):

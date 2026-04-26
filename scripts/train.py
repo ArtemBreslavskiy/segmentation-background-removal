@@ -1,15 +1,21 @@
-import ctypes
 import logging
-import platform
 from typing import Optional
+from functools import partial
 
 import torch
 import yaml
+import json
+import re
 
-from src.utils.factories.dataloaders_factory import get_train_dataloader, get_val_dataloader
-from paths.ProjectPaths import ProjectPaths
+from ProjectPaths import ProjectPaths
+from src.data.pad_collate import pad_collate
 from src.engine.Trainer import Trainer
 from src.logs.logger_setup import configure_loggers
+from src.utils.sleep_utils import prevent_sleep, allow_sleep
+from src.utils.factories.dataloader_factory import (
+    create_train_dataloader_with_weighted_dynamic_bucket_batch_sampler,
+    create_val_dataloader_with_weighted_dynamic_bucket_batch_sampler
+)
 from src.utils.factories.loss_fn_factory import create_loss
 from src.utils.factories.metrics_factory import create_metrics
 from src.utils.factories.model_factory import create_model
@@ -25,27 +31,14 @@ def train(logger: Optional[logging.Logger] = None):
     logger.info("TRAINING STARTED")
     logger.info("=" * 60)
 
-    def prevent_sleep():
-        if platform.system() == "Windows":
-            ctypes.windll.kernel32.SetThreadExecutionState(0x80000002)
-            logger.info("Sleep prevention activated (Windows)")
-
-    def allow_sleep():
-        if platform.system() == "Windows":
-            ctypes.windll.kernel32.SetThreadExecutionState(0x80000000)
-            logger.info("Sleep prevention deactivated (Windows)")
-
-    try:
-        torch.multiprocessing.set_start_method("spawn", force=True)
-        logger.debug("Multiprocessing start method set to 'spawn'")
-    except RuntimeError as ex:
-        logger.debug("Multiprocessing start method already set: %s", ex)
-
     path = ProjectPaths()
     logger.info("Loading configuration from: %s", path.CONFIG)
-
     with open(path.CONFIG) as f:
         config = yaml.safe_load(f)
+    with open(path.TRAIN) as f:
+        train_manifest = json.load(f)
+    with open(path.VAL) as f:
+        val_manifest = json.load(f)
     logger.debug("Configuration loaded successfully")
 
     logger.info("Creating model components...")
@@ -66,6 +59,29 @@ def train(logger: Optional[logging.Logger] = None):
     logger.info(
         "Learning rate scheduler created: %s", config["learning"]["scheduler"]["class"]
     )
+
+    if config["dataloader"]["pad_collate"]["enabled"]:
+        collate_fn = partial(
+            pad_collate,
+            alignment=config["dataloader"]["pad_collate"]["alignment"],
+            pad_value=config["dataloader"]["pad_collate"]["pad_value"])
+    else:
+        collate_fn = None
+
+    train_loader = create_train_dataloader_with_weighted_dynamic_bucket_batch_sampler(
+        config=config,
+        manifest=train_manifest,
+        collate_fn=collate_fn,
+        shuffle=True
+    )
+    logger.info("Train dataloader created")
+    val_loader = create_val_dataloader_with_weighted_dynamic_bucket_batch_sampler(
+        config=config,
+        manifest=val_manifest,
+        collate_fn=collate_fn,
+        shuffle=False
+    )
+    logger.info("Val dataloader created")
 
     device = (
         "cuda"
@@ -104,8 +120,16 @@ def train(logger: Optional[logging.Logger] = None):
 
     logger.info("Trainer initialized successfully")
 
-    saved_path = saved_path = log_dir / f"{model_name}_best.pt"
-    if saved_path.exists():
+    pattern = re.compile(rf"{re.escape(model_name)}_epoch_(\d+)_.*\.pt$")
+    files = []
+    for f in path.SAVED_CHECKPOINTS.iterdir():
+        match = pattern.match(f.name)
+        if match:
+            epoch = int(match.group(1))
+            files.append((epoch, f))
+    if files:
+        files.sort(key=lambda x: x[0])
+        saved_path = files[-1][1]
         logger.info("Found existing checkpoint: %s", saved_path)
         try:
             trainer.load_checkpoint(
@@ -136,18 +160,6 @@ def train(logger: Optional[logging.Logger] = None):
     logger.info("Accumulation_steps: %d", config["learning"]["accumulation_steps"])
 
     try:
-        train_loader = get_train_dataloader(config, path)
-        val_loader = get_val_dataloader(config, path)
-
-        logger.info(
-            "Train dataloader created with batch size: %d",
-            config["dataloader"]["batch_sizes"]["train"],
-        )
-        logger.info(
-            "Validation dataloader created with batch size: %d",
-            config["dataloader"]["batch_sizes"]["val"],
-        )
-
         logger.info("Training samples: %d", len(train_loader.dataset))
         logger.info("Validation samples: %d", len(val_loader.dataset))
 
@@ -183,4 +195,12 @@ if __name__ == "__main__":
         config = yaml.safe_load(f)
 
     configure_loggers(path.CONFIG, path.LOGS)
-    train(logger=get_logger(config["logs"]["types"]["train"]["name"]))
+    logger = get_logger(config["logs"]["types"]["train"]["name"])
+
+    try:
+        torch.multiprocessing.set_start_method("spawn", force=True)
+        logger.debug("Multiprocessing start method set to 'spawn'")
+    except RuntimeError as ex:
+        logger.debug("Multiprocessing start method already set: %s", ex)
+
+    train(logger=logger)

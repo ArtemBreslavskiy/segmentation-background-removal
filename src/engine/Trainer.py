@@ -138,7 +138,6 @@ class Trainer(BaseModule):
                 self.logger.exception(error_msg)
                 raise ValueError(error_msg)
 
-            saved_yet = False
             if is_better(current_value, self.best_value):
                 self.best_value = current_value
                 self.logger.info(
@@ -149,7 +148,6 @@ class Trainer(BaseModule):
                 )
                 self.save_checkpoint(is_best=True)
                 patience_counter = 0
-                saved_yet = True
             else:
                 patience_counter += 1
                 self.logger.debug(
@@ -186,7 +184,7 @@ class Trainer(BaseModule):
                     f"Scheduler stepped (epoch-based). Current LR: {current_lr:.2e}"
                 )
 
-            if self.current_epoch % log_interval == 0 and not saved_yet:
+            if self.current_epoch % log_interval == 0:
                 self.logger.info(
                     "Checkpoint saved for epoch %d (intermediate).", self.current_epoch
                 )
@@ -197,6 +195,7 @@ class Trainer(BaseModule):
         if is_best:
             filename = self.log_dir / f"{self.model_name}_best.pt"
         else:
+            (self.log_dir / "checkpoints").mkdir(parents=True, exist_ok=True)
             filename = (
                 self.log_dir
                 / "checkpoints"
@@ -274,13 +273,11 @@ class Trainer(BaseModule):
                 "Checkpoint does not contain config. Cannot restore components."
             )
 
-        from src.utils.visualization.factory import (
-            create_loss,
-            create_metrics,
-            create_model,
-            create_optimizer,
-            create_scheduler,
-        )
+        from src.utils.factories.loss_fn_factory import create_loss
+        from src.utils.factories.metrics_factory import create_metrics
+        from src.utils.factories.model_factory import create_model
+        from src.utils.factories.optimizer_factory import create_optimizer
+        from src.utils.factories.scheduler_factory import create_scheduler
 
         model = create_model(config)
         loss_function = create_loss(config)

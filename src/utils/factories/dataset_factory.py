@@ -4,18 +4,28 @@ from typing import Union, List, Optional, Dict
 
 from src.data.BinarySegmentationDataset import BinarySegmentationDataset
 from src.data.transforms import get_train_transforms, get_val_test_transforms
+from ProjectPaths import ProjectPaths
 
 
-def get_dataset(
+def create_dataset(
     config: Dict,
     mode: str,
-    json_path: Optional[Union[str, Path]] = None,
+    json_path: Optional[Union[ProjectPaths, str, Path]] = None,
     manifest: Optional[List[Dict]] = None,
 ) -> BinarySegmentationDataset:
     mode = mode.lower()
     correct_modes = ["train", "test", "val"]
     if mode not in correct_modes:
         raise ValueError(f"Unknown mode: {mode}. Available mods: {correct_modes}")
+
+    if isinstance(json_path, ProjectPaths):
+        if mode == "train":
+            json_path = json_path.TRAIN
+        elif mode == "test":
+            json_path = json_path.TEST
+        elif mode == "val":
+            json_path = json_path.VAL
+
     if not manifest:
         if json_path:
             with open(json_path, 'r', encoding='utf-8') as f:
@@ -33,13 +43,13 @@ def get_dataset(
     )
 
 
-def get_train_dataset(config: Dict, json_path: Optional[Union[str, Path]]) -> BinarySegmentationDataset:
-    return get_dataset(config=config, mode="train", json_path=json_path)
+def create_train_dataset(config: Dict, json_path: Optional[Union[str, Path]]) -> BinarySegmentationDataset:
+    return create_dataset(config=config, mode="train", json_path=json_path)
 
 
-def get_test_dataset(config: Dict, json_path: Optional[Union[str, Path]]) -> BinarySegmentationDataset:
-    return get_dataset(config=config, mode="test", json_path=json_path)
+def create_test_dataset(config: Dict, json_path: Optional[Union[str, Path]]) -> BinarySegmentationDataset:
+    return create_dataset(config=config, mode="test", json_path=json_path)
 
 
-def get_val_dataset(config: Dict, json_path: Optional[Union[str, Path]]) -> BinarySegmentationDataset:
-    return get_dataset(config=config, mode="val", json_path=json_path)
+def create_val_dataset(config: Dict, json_path: Optional[Union[str, Path]]) -> BinarySegmentationDataset:
+    return create_dataset(config=config, mode="val", json_path=json_path)

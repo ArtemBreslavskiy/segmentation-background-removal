@@ -9,7 +9,7 @@ from tqdm import tqdm
 from PIL import Image
 from sklearn.model_selection import train_test_split
 
-from paths.ProjectPaths import ProjectPaths
+from ProjectPaths import ProjectPaths
 from src.logs.logger_setup import configure_loggers
 
 
