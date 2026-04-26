@@ -33,6 +33,7 @@ def create_dataloader(
     manifest: Optional[List[Dict]] = None,
     batch_sampler: Optional[data.BatchSampler] = None,
     collate_fn: Optional[Callable] = None,
+    resize_mode: str = "resize",
 ) -> data.DataLoader:
     mode = mode.lower()
     correct_modes = ["train", "test", "val"]
@@ -75,11 +76,11 @@ def create_dataloader(
         )
 
     if mode == "train":
-        dataset = create_train_dataset(config, manifest=manifest)
+        dataset = create_train_dataset(config, manifest=manifest, resize_mode=resize_mode)
     elif mode == "val":
-        dataset = create_val_dataset(config, manifest=manifest)
+        dataset = create_val_dataset(config, manifest=manifest, resize_mode=resize_mode)
     elif mode == "test":
-        dataset = create_test_dataset(config, manifest=manifest)
+        dataset = create_test_dataset(config, manifest=manifest, resize_mode=resize_mode)
 
     generator = torch.Generator()
     generator.manual_seed(config["dataloader"]["seed"])
@@ -118,6 +119,7 @@ def create_train_dataloader(
     manifest: Optional[List[Dict]] = None,
     batch_sampler: Optional[data.BatchSampler] = None,
     collate_fn: Optional[Callable] = None,
+    resize_mode: str = "resize",
 ) -> data.DataLoader:
     return create_dataloader(
         config=config,
@@ -126,6 +128,7 @@ def create_train_dataloader(
         mode="train",
         batch_sampler=batch_sampler,
         collate_fn=collate_fn,
+        resize_mode=resize_mode,
     )
 
 
@@ -135,6 +138,7 @@ def create_test_dataloader(
     manifest: Optional[List[Dict]] = None,
     batch_sampler: Optional[data.BatchSampler] = None,
     collate_fn: Optional[Callable] = None,
+    resize_mode: str = "resize",
 ) -> data.DataLoader:
     return create_dataloader(
         config=config,
@@ -143,6 +147,7 @@ def create_test_dataloader(
         mode="test",
         batch_sampler=batch_sampler,
         collate_fn=collate_fn,
+        resize_mode=resize_mode,
     )
 
 
@@ -152,6 +157,7 @@ def create_val_dataloader(
     manifest: Optional[List[Dict]] = None,
     batch_sampler: Optional[data.BatchSampler] = None,
     collate_fn: Optional[Callable] = None,
+    resize_mode: str = "resize",
 ) -> data.DataLoader:
     return create_dataloader(
         config=config,
@@ -160,6 +166,7 @@ def create_val_dataloader(
         mode="val",
         batch_sampler=batch_sampler,
         collate_fn=collate_fn,
+        resize_mode=resize_mode,
     )
 
 
@@ -169,6 +176,7 @@ def create_dataloader_with_weighted_dynamic_bucket_batch_sampler(
     manifest: List[Dict],
     collate_fn: Callable,
     shuffle: bool = True,
+    resize_mode: str = "resize",
 ) -> data.DataLoader:
     mode = mode.lower()
     correct_modes = ["train", "test", "val"]
@@ -190,6 +198,7 @@ def create_dataloader_with_weighted_dynamic_bucket_batch_sampler(
         dataset_areas=dataset_areas,
         dataset_aspect_ratios=dataset_aspect_ratios,
         shuffle=shuffle,
+        resize_mode=resize_mode,
     )
     loader_kwargs = {
         "mode": mode,
@@ -207,6 +216,7 @@ def create_train_dataloader_with_weighted_dynamic_bucket_batch_sampler(
     manifest: List[Dict],
     collate_fn: Callable,
     shuffle: bool = True,
+    resize_mode: str = "resize",
 ) -> data.DataLoader:
     return create_dataloader_with_weighted_dynamic_bucket_batch_sampler(
         config=config,
@@ -214,6 +224,7 @@ def create_train_dataloader_with_weighted_dynamic_bucket_batch_sampler(
         manifest=manifest,
         collate_fn=collate_fn,
         shuffle=shuffle,
+        resize_mode=resize_mode,
     )
 
 
@@ -222,6 +233,7 @@ def create_test_dataloader_with_weighted_dynamic_bucket_batch_sampler(
     manifest: List[Dict],
     collate_fn: Callable,
     shuffle: bool = False,
+    resize_mode: str = "resize",
 ) -> data.DataLoader:
     return create_dataloader_with_weighted_dynamic_bucket_batch_sampler(
         config=config,
@@ -229,6 +241,7 @@ def create_test_dataloader_with_weighted_dynamic_bucket_batch_sampler(
         manifest=manifest,
         collate_fn=collate_fn,
         shuffle=shuffle,
+        resize_mode=resize_mode,
     )
 
 
@@ -237,6 +250,7 @@ def create_val_dataloader_with_weighted_dynamic_bucket_batch_sampler(
     manifest: List[Dict],
     collate_fn: Callable,
     shuffle: bool = False,
+    resize_mode: str = "resize",
 ) -> data.DataLoader:
     return create_dataloader_with_weighted_dynamic_bucket_batch_sampler(
         config=config,
@@ -244,4 +258,5 @@ def create_val_dataloader_with_weighted_dynamic_bucket_batch_sampler(
         manifest=manifest,
         collate_fn=collate_fn,
         shuffle=shuffle,
+        resize_mode=resize_mode,
     )

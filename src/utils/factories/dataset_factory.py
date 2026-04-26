@@ -12,11 +12,19 @@ def create_dataset(
     mode: str,
     json_path: Optional[Union[ProjectPaths, str, Path]] = None,
     manifest: Optional[List[Dict]] = None,
+    resize_mode: str = "resize",
 ) -> BinarySegmentationDataset:
     mode = mode.lower()
     correct_modes = ["train", "test", "val"]
     if mode not in correct_modes:
         raise ValueError(f"Unknown mode: {mode}. Available mods: {correct_modes}")
+
+    resize_mode = resize_mode.lower()
+    resize_modes = ["resize", "crop"]
+    if resize_mode not in resize_modes:
+        raise ValueError(
+            f"Unknown mode: {resize_mode}. Available mods: {resize_modes}"
+        )
 
     if isinstance(json_path, ProjectPaths):
         if mode == "train":
@@ -41,23 +49,32 @@ def create_dataset(
         manifest=manifest,
         transforms=transforms,
         max_area=dataset_config.get("max_area", 0),
-        resize_mode=dataset_config.get("resize_mode", "resize"),
+        resize_mode=resize_mode,
     )
 
 
 def create_train_dataset(
-    config: Dict, json_path: Optional[Union[str, Path]]
+    config: Dict,
+    json_path: Optional[Union[ProjectPaths, str, Path]] = None,
+    manifest: Optional[List[Dict]] = None,
+    resize_mode: str = "resize",
 ) -> BinarySegmentationDataset:
-    return create_dataset(config=config, mode="train", json_path=json_path)
+    return create_dataset(config=config, mode="train", json_path=json_path, manifest=manifest, resize_mode=resize_mode)
 
 
 def create_test_dataset(
-    config: Dict, json_path: Optional[Union[str, Path]]
+    config: Dict,
+    json_path: Optional[Union[ProjectPaths, str, Path]] = None,
+    manifest: Optional[List[Dict]] = None,
+    resize_mode: str = "resize",
 ) -> BinarySegmentationDataset:
-    return create_dataset(config=config, mode="test", json_path=json_path)
+    return create_dataset(config=config, mode="test", json_path=json_path, manifest=manifest, resize_mode=resize_mode)
 
 
 def create_val_dataset(
-    config: Dict, json_path: Optional[Union[str, Path]]
+    config: Dict,
+    json_path: Optional[Union[ProjectPaths, str, Path]] = None,
+    manifest: Optional[List[Dict]] = None,
+    resize_mode: str = "resize",
 ) -> BinarySegmentationDataset:
-    return create_dataset(config=config, mode="val", json_path=json_path)
+    return create_dataset(config=config, mode="val", json_path=json_path, manifest=manifest, resize_mode=resize_mode)
