@@ -198,13 +198,13 @@ def create_dataloader_with_weighted_dynamic_bucket_batch_sampler(
         dataset_areas=dataset_areas,
         dataset_aspect_ratios=dataset_aspect_ratios,
         shuffle=shuffle,
-        resize_mode=resize_mode,
     )
     loader_kwargs = {
         "mode": mode,
         "config": config,
         "manifest": manifest,
         "batch_sampler": batch_sampler,
+        "resize_mode": resize_mode,
     }
     if collate_fn is not None:
         loader_kwargs["collate_fn"] = collate_fn
