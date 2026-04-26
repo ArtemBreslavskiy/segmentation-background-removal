@@ -4,7 +4,7 @@ from pathlib import Path
 
 @dataclass
 class ProjectPaths:
-    ROOT: Path = Path(__file__).parent.parent
+    ROOT: Path = Path(__file__).parent
 
     CONFIG: Path = ROOT / "config.yaml"
     LOGS: Path = ROOT / "logs"
