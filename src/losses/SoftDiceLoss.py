@@ -7,11 +7,11 @@ class SoftDiceLoss(nn.Module):
         self.smooth = smooth
 
     def forward(self, logits, targets):
-        num = targets.size(0)
+        B = targets.size(0)
         probs = nn.functional.sigmoid(logits)
 
-        probs = probs.view(num, -1)
-        targets = targets.view(num, -1)
+        probs = probs.view(B, -1)
+        targets = targets.view(B, -1)
 
         intersection = (probs * targets).sum(dim=1)
         cardinality = probs.sum(dim=1) + targets.sum(dim=1)

@@ -89,7 +89,7 @@ learning:
             reduction: 'mean'
             smooth: 1e-6
 
-        - class: "src.losses.PixelwiseSoftDiceLoss.PixelwiseSoftDiceLoss"
+        - class: "src.losses.MaskedPixelwiseSoftDiceLoss.MaskedPixelwiseSoftDiceLoss"
           params: {}
 
   optimizer:

@@ -33,18 +33,18 @@ class ComboLoss(nn.Module):
 
         self.weights = [w / total_weights for w in weights]
 
-    def forward(self, logits, targets):
-        total, _ = self.forward_with_components(logits, targets)
+    def forward(self, *args, **kwargs):
+        total, _ = self.forward_with_components(*args, **kwargs)
         return total
 
-    def forward_with_components(self, logits, targets):
-        raw = self.get_raw_losses(logits, targets)
+    def forward_with_components(self, *args, **kwargs):
+        raw = self.get_raw_losses(*args, **kwargs)
         weighted = [r * w for r, w in zip(raw.values(), self.weights)]
         return sum(weighted), raw
 
-    def get_raw_losses(self, logits, targets):
+    def get_raw_losses(self, *args, **kwargs):
         return {
-            name: lf(logits, targets)
+            name: lf(*args, **kwargs)
             for name, lf in zip(self.names, self.loss_functions)
         }
 

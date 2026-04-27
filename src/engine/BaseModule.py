@@ -94,8 +94,10 @@ class BaseModule(ABC):
 
     def _unpack_batch(self, batch: Union[Tuple, List, Dict]):
         if isinstance(batch, (Tuple, List)):
-            if len(batch) >= 2:
+            if len(batch) == 2:
                 return batch[0], batch[1]
+            elif len(batch) >= 3:
+                return batch[0], batch[1], batch[2]
             else:
                 error_msg = f"Batch must contain at least 2 elements, got {len(batch)}"
                 self.logger.exception(error_msg)
@@ -241,8 +243,11 @@ class BaseModule(ABC):
             for batch in pbar:
                 try:
                     batch = self._move_batch_to_device(batch)
-                    x, y = self._unpack_batch(batch)
-                    num_pixels = x.shape[0] * x.shape[2] * x.shape[3]
+                    x, y, valid_mask = (self._unpack_batch(batch))
+                    if valid_mask is not None:
+                        num_pixels = valid_mask.sum().item()
+                    else:
+                        num_pixels = x.shape[0] * x.shape[2] * x.shape[3]
 
                     with autocast(self.config["learning"].get("use_fp16", False)):
                         predictions = self.model(x)
