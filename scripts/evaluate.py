@@ -81,16 +81,3 @@ def evaluate(config: Dict, logger: Optional[logging.Logger] = None):
     except Exception:
         logger.exception("Error during evaluation")
         raise
-
-
-if __name__ == "__main__":
-    from src.logs.logger_setup import get_logger
-
-    path = ProjectPaths()
-    with open(path.CONFIG) as f:
-        config = yaml.safe_load(f)
-
-    configure_loggers(path.CONFIG, path.LOGS)
-    logger = get_logger(config["logs"]["types"]["evaluate"]["name"])
-
-    evaluate(config=config, logger=logger)

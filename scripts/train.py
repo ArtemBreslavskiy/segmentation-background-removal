@@ -161,22 +161,3 @@ def train(config: Dict, logger: Optional[logging.Logger] = None):
 
     finally:
         allow_sleep()
-
-
-if __name__ == "__main__":
-    from src.logs.logger_setup import get_logger
-
-    path = ProjectPaths()
-    with open(path.CONFIG) as f:
-        config = yaml.safe_load(f)
-
-    configure_loggers(path.CONFIG, path.LOGS)
-    logger = get_logger(config["logs"]["types"]["train"]["name"])
-
-    try:
-        torch.multiprocessing.set_start_method("spawn", force=True)
-        logger.debug("Multiprocessing start method set to 'spawn'")
-    except RuntimeError as ex:
-        logger.debug("Multiprocessing start method already set: %s", ex)
-
-    train(config=config, logger=logger)
