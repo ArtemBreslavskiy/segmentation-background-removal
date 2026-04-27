@@ -76,11 +76,7 @@ class TestBinarySegmentationDataset:
     @pytest.mark.parametrize("key", ["geometric", "photometric"])
     def test_single_dict_transform(self, binary_dataset_path, key):
         transforms = {
-            key: (
-                A.HorizontalFlip()
-                if key == "geometric"
-                else A.RandomBrightnessContrast()
-            ),
+            key: (A.HorizontalFlip() if key == "geometric" else A.RandomBrightnessContrast()),
             "final": A.ToTensorV2(),
         }
         ds = BinarySegmentationDataset(binary_dataset_path, transforms=transforms)
@@ -105,9 +101,7 @@ class TestBinarySegmentationDataset:
     @pytest.mark.parametrize(
         "transforms",
         [
-            A.Compose(
-                [A.RandomRotate90(), A.GaussianBlur(blur_limit=3), A.ToTensorV2()]
-            ),
+            A.Compose([A.RandomRotate90(), A.GaussianBlur(blur_limit=3), A.ToTensorV2()]),
             {
                 "geometric": A.Compose([A.RandomRotate90()]),
                 "final": A.Compose([A.ToTensorV2()]),

@@ -106,9 +106,7 @@ class TestFocalLoss:
         assert loss_one.item() == pytest.approx(0.0, abs=1e-3)
 
     def test_focal_loss_alpha_monotonic(self):
-        loss_functions = [
-            FocalLoss(alpha=alpha, gamma=2.0) for alpha in np.arange(0.0, 1.0, 0.05)
-        ]
+        loss_functions = [FocalLoss(alpha=alpha, gamma=2.0) for alpha in np.arange(0.0, 1.0, 0.05)]
 
         pred_uncertain = torch.zeros(2, 1, 64, 64)
         target = torch.ones(2, 1, 64, 64).float()
@@ -119,9 +117,7 @@ class TestFocalLoss:
             assert losses[i - 1] <= losses[i] + 1e-5
 
     def test_focal_loss_gamma_monotonic(self):
-        loss_functions = [
-            FocalLoss(alpha=0.75, gamma=gamma) for gamma in np.arange(0.0, 5.0, 0.1)
-        ]
+        loss_functions = [FocalLoss(alpha=0.75, gamma=gamma) for gamma in np.arange(0.0, 5.0, 0.1)]
 
         pred = torch.ones(2, 1, 64, 64) * 2
         target = torch.ones(2, 1, 64, 64).float()

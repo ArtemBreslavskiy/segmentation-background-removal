@@ -26,12 +26,8 @@ def get_train_transforms() -> Dict[str, Union[A.Compose, A.BasicTransform]]:
 
     photometric = A.Compose(
         [
-            A.RandomBrightnessContrast(
-                brightness_limit=0.25, contrast_limit=0.25, p=0.5
-            ),
-            A.HueSaturationValue(
-                hue_shift_limit=15, sat_shift_limit=25, val_shift_limit=15, p=0.5
-            ),
+            A.RandomBrightnessContrast(brightness_limit=0.25, contrast_limit=0.25, p=0.5),
+            A.HueSaturationValue(hue_shift_limit=15, sat_shift_limit=25, val_shift_limit=15, p=0.5),
             A.RGBShift(r_shift_limit=20, g_shift_limit=20, b_shift_limit=20, p=0.3),
             A.CLAHE(clip_limit=2.0, tile_grid_size=(8, 8), p=0.3),
             A.RandomGamma(gamma_limit=(70, 130), p=0.3),

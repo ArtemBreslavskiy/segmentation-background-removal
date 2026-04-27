@@ -30,3 +30,4 @@ class MaskedPixelwiseSoftDiceLoss(nn.Module):
         dice_loss_per_image = 1.0 - dice_score
 
         loss = (dice_loss_per_image * pixels_per_image).sum() / total_pixels
+        return loss

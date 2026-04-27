@@ -8,9 +8,7 @@ from src.engine.BaseModule import BaseModule
 class TestBaseModule:
 
     @pytest.mark.parametrize("device", ["cpu"])
-    def test_init_sets_attributes(
-        self, model, config, loss, optimizer, metrics, log_dir, device
-    ):
+    def test_init_sets_attributes(self, model, config, loss, optimizer, metrics, log_dir, device):
         module = BaseModule(
             model=model,
             config=config,
@@ -29,9 +27,7 @@ class TestBaseModule:
 
     @pytest.mark.parametrize("device", ["cpu", torch.device("cpu")])
     def test_device_validate_cpu(self, model, config, loss, device):
-        module = BaseModule(
-            model=model, config=config, loss_function=loss, device=device
-        )
+        module = BaseModule(model=model, config=config, loss_function=loss, device=device)
         assert module.device.type == "cpu"
 
     @pytest.mark.parametrize("device", ["invalid", "gpu:99"])
@@ -90,9 +86,7 @@ class TestBaseModule:
         preds = torch.randn(2, 1, 32, 32)
         targets = torch.randint(0, 2, (2, 1, 32, 32)).float()
 
-        result = trainer._compute_loss(
-            preds, targets, return_components=return_components
-        )
+        result = trainer._compute_loss(preds, targets, return_components=return_components)
 
         if return_components:
             loss, comp = result
@@ -152,17 +146,13 @@ class TestBaseModule:
         assert isinstance(values, dict)
 
     def test_loss_backward_updates_weights(self, trainer, train_loader):
-        before = [
-            p.clone().detach() for p in trainer.model.parameters() if p.requires_grad
-        ]
+        before = [p.clone().detach() for p in trainer.model.parameters() if p.requires_grad]
         trainer.run_epoch(train_loader, mode="train")
         after = [p for p in trainer.model.parameters() if p.requires_grad]
         assert any(not torch.equal(b, a) for b, a in zip(before, after))
 
     def test_eval_mode_no_grad(self, trainer, val_loader):
-        before = [
-            p.clone().detach() for p in trainer.model.parameters() if p.requires_grad
-        ]
+        before = [p.clone().detach() for p in trainer.model.parameters() if p.requires_grad]
         trainer.run_epoch(val_loader, mode="val")
         after = [p for p in trainer.model.parameters() if p.requires_grad]
         assert all(torch.equal(b, a) for b, a in zip(before, after))

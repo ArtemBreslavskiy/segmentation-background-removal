@@ -95,10 +95,7 @@ class Trainer(BaseModule):
         self.save_criterion = save_criterion.lower()
 
         if self.save_criterion.startswith("val/") and val_dataloader is None:
-            error_msg = (
-                f"With save criterion {self.save_criterion}, "
-                f"val_dataloader cannot be None"
-            )
+            error_msg = f"With save criterion {self.save_criterion}, " f"val_dataloader cannot be None"
             self.logger.exception(error_msg)
             raise ValueError(error_msg)
 
@@ -168,8 +165,7 @@ class Trainer(BaseModule):
 
             if early_stopping_patience and patience_counter >= early_stopping_patience:
                 self.logger.warning(
-                    "Early stopping triggered after %d epochs without improvement. "
-                    "Best %s: %.4f",
+                    "Early stopping triggered after %d epochs without improvement. " "Best %s: %.4f",
                     early_stopping_patience,
                     self.save_criterion,
                     self.best_value,
@@ -178,22 +174,14 @@ class Trainer(BaseModule):
 
             if self.scheduler:
                 if isinstance(self.scheduler, optim.lr_scheduler.ReduceLROnPlateau):
-                    self.scheduler.step(
-                        val_metrics["loss"]
-                        if val_dataloader is not None
-                        else train_metrics["loss"]
-                    )
+                    self.scheduler.step(val_metrics["loss"] if val_dataloader is not None else train_metrics["loss"])
                 else:
                     self.scheduler.step()
                 current_lr = self.optimizer.param_groups[0]["lr"]
-                self.logger.debug(
-                    f"Scheduler stepped (epoch-based). Current LR: {current_lr:.2e}"
-                )
+                self.logger.debug(f"Scheduler stepped (epoch-based). Current LR: {current_lr:.2e}")
 
             if self.current_epoch % log_interval == 0:
-                self.logger.info(
-                    "Checkpoint saved for epoch %d (intermediate).", self.current_epoch
-                )
+                self.logger.info("Checkpoint saved for epoch %d (intermediate).", self.current_epoch)
                 self.save_checkpoint(is_best=False)
 
     def save_checkpoint(self, is_best: bool = False):
@@ -202,11 +190,7 @@ class Trainer(BaseModule):
             filename = self.log_dir / f"{self.model_name}_best.pt"
         else:
             (self.log_dir / "checkpoints").mkdir(parents=True, exist_ok=True)
-            filename = (
-                self.log_dir
-                / "checkpoints"
-                / f"{self.model_name}_epoch_{self.current_epoch}_{timestamp}.pt"
-            )
+            filename = self.log_dir / "checkpoints" / f"{self.model_name}_epoch_{self.current_epoch}_{timestamp}.pt"
 
         checkpoint = {
             "epoch": self.current_epoch,
@@ -215,9 +199,7 @@ class Trainer(BaseModule):
             "best_value": self.best_value,
             "model_state_dict": self.model.state_dict(),
             "optimizer_state_dict": self.optimizer.state_dict(),
-            "scheduler_state_dict": (
-                self.scheduler.state_dict() if self.scheduler else None
-            ),
+            "scheduler_state_dict": (self.scheduler.state_dict() if self.scheduler else None),
             "metrics_history": self.metrics_history,
             "config": self.config,
             "logger": self.logger,
@@ -275,9 +257,7 @@ class Trainer(BaseModule):
 
         config = checkpoint["config"]
         if config is None:
-            raise ValueError(
-                "Checkpoint does not contain config. Cannot restore components."
-            )
+            raise ValueError("Checkpoint does not contain config. Cannot restore components.")
 
         from src.utils.factories.loss_fn_factory import create_loss
         from src.utils.factories.metrics_factory import create_metrics
@@ -307,9 +287,7 @@ class Trainer(BaseModule):
         if trainer.scheduler and checkpoint["scheduler_state_dict"]:
             trainer.scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
 
-        trainer.metrics = {
-            name: metric.to(trainer.device) for name, metric in trainer.metrics.items()
-        }
+        trainer.metrics = {name: metric.to(trainer.device) for name, metric in trainer.metrics.items()}
         trainer.metrics_history = checkpoint["metrics_history"]
         trainer.current_epoch = checkpoint["epoch"]
         trainer.has_components = isinstance(trainer.loss_function, ComboLoss)

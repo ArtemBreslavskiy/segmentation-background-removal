@@ -18,9 +18,7 @@ class MockLoss(nn.Module):
 
 class TestComboLoss:
     def test_combo_loss_returns_float(self):
-        loss_function = ComboLoss(
-            [SoftDiceLoss(smooth=1.0), FocalLoss(alpha=0.75, gamma=2.0)], [0.7, 0.3]
-        )
+        loss_function = ComboLoss([SoftDiceLoss(smooth=1.0), FocalLoss(alpha=0.75, gamma=2.0)], [0.7, 0.3])
 
         pred = torch.randn(2, 1, 64, 64)
         target = torch.randint(0, 2, (2, 1, 64, 64)).float()
@@ -32,9 +30,7 @@ class TestComboLoss:
         assert loss.item() >= 0
 
     def test_combo_loss_perfect_match(self):
-        loss_function = ComboLoss(
-            [SoftDiceLoss(smooth=1.0), FocalLoss(alpha=0.75, gamma=2.0)], [0.7, 0.3]
-        )
+        loss_function = ComboLoss([SoftDiceLoss(smooth=1.0), FocalLoss(alpha=0.75, gamma=2.0)], [0.7, 0.3])
 
         pred_ones = torch.ones(2, 1, 64, 64) * 100
         target_ones = torch.ones(2, 1, 64, 64).float()
@@ -49,9 +45,7 @@ class TestComboLoss:
         assert loss_zero.item() == pytest.approx(0.0, abs=1e-3)
 
     def test_combo_loss_perfect_mismatch(self):
-        loss_function = ComboLoss(
-            [SoftDiceLoss(smooth=1.0), FocalLoss(alpha=0.75, gamma=2.0)], [0.7, 0.3]
-        )
+        loss_function = ComboLoss([SoftDiceLoss(smooth=1.0), FocalLoss(alpha=0.75, gamma=2.0)], [0.7, 0.3])
 
         pred_ones = torch.ones(2, 1, 64, 64) * 100
         target_zeros = torch.zeros(2, 1, 64, 64).float()
@@ -67,9 +61,7 @@ class TestComboLoss:
         assert loss_mismatch_2.item() > loss_smatch
 
     def test_combo_loss_gradients(self):
-        loss_function = ComboLoss(
-            [SoftDiceLoss(smooth=1.0), FocalLoss(alpha=0.75, gamma=2.0)], [0.7, 0.3]
-        )
+        loss_function = ComboLoss([SoftDiceLoss(smooth=1.0), FocalLoss(alpha=0.75, gamma=2.0)], [0.7, 0.3])
 
         pred = torch.randn(2, 1, 64, 64, requires_grad=True)
         target = torch.randint(0, 2, (2, 1, 64, 64)).float()
@@ -82,9 +74,7 @@ class TestComboLoss:
         assert pred.grad.shape == pred.shape
 
     def test_combo_loss_gradients_with_components(self):
-        loss_function = ComboLoss(
-            [SoftDiceLoss(smooth=1.0), FocalLoss(alpha=0.75, gamma=2.0)], [0.7, 0.3]
-        )
+        loss_function = ComboLoss([SoftDiceLoss(smooth=1.0), FocalLoss(alpha=0.75, gamma=2.0)], [0.7, 0.3])
 
         pred = torch.randn(2, 1, 64, 64, requires_grad=True)
         target = torch.randint(0, 2, (2, 1, 64, 64)).float()
@@ -101,9 +91,7 @@ class TestComboLoss:
 
     @pytest.mark.parametrize("batch_size", list(range(1, 33)))
     def test_combo_loss_different_batch_sizes(self, batch_size):
-        loss_function = ComboLoss(
-            [SoftDiceLoss(smooth=1.0), FocalLoss(alpha=0.75, gamma=2.0)], [0.7, 0.3]
-        )
+        loss_function = ComboLoss([SoftDiceLoss(smooth=1.0), FocalLoss(alpha=0.75, gamma=2.0)], [0.7, 0.3])
 
         pred = torch.randn(batch_size, 1, 64, 64)
         target = torch.randint(0, 2, (batch_size, 1, 64, 64)).float()
@@ -117,9 +105,7 @@ class TestComboLoss:
         [(i, j) for i in range(32, 513, 32) for j in range(32, 513, 32)],
     )
     def test_combo_loss_different_resolutions(self, height, width):
-        loss_function = ComboLoss(
-            [SoftDiceLoss(smooth=1.0), FocalLoss(alpha=0.75, gamma=2.0)], [0.7, 0.3]
-        )
+        loss_function = ComboLoss([SoftDiceLoss(smooth=1.0), FocalLoss(alpha=0.75, gamma=2.0)], [0.7, 0.3])
 
         pred = torch.randn(2, 1, height, width)
         target = torch.randint(0, 2, (2, 1, height, width)).float()
@@ -144,9 +130,7 @@ class TestComboLoss:
         assert combo_function.count == num_losses
 
     def test_combo_loss_extreme_value(self):
-        loss_function = ComboLoss(
-            [SoftDiceLoss(smooth=1.0), FocalLoss(alpha=0.75, gamma=2.0)], [0.7, 0.3]
-        )
+        loss_function = ComboLoss([SoftDiceLoss(smooth=1.0), FocalLoss(alpha=0.75, gamma=2.0)], [0.7, 0.3])
 
         pred_big = torch.ones(2, 1, 64, 64) * 1e6
         pred_small = torch.ones(2, 1, 64, 64) * 1e-6
@@ -170,9 +154,7 @@ class TestComboLoss:
         assert loss_one_2.item() >= 0
 
     def test_combo_loss_monotonic(self):
-        loss_function = ComboLoss(
-            [SoftDiceLoss(smooth=1.0), FocalLoss(alpha=0.75, gamma=2.0)], [0.7, 0.3]
-        )
+        loss_function = ComboLoss([SoftDiceLoss(smooth=1.0), FocalLoss(alpha=0.75, gamma=2.0)], [0.7, 0.3])
 
         preds = [torch.ones(2, 1, 64, 64) * v for v in range(-100, 101)]
         target_ones = torch.ones(2, 1, 64, 64).float()
@@ -182,9 +164,7 @@ class TestComboLoss:
             assert losses[i] <= losses[i - 1] + 1e-5
 
     def test_combo_loss_reproducibility(self):
-        loss_function = ComboLoss(
-            [SoftDiceLoss(smooth=1.0), FocalLoss(alpha=0.75, gamma=2.0)], [0.7, 0.3]
-        )
+        loss_function = ComboLoss([SoftDiceLoss(smooth=1.0), FocalLoss(alpha=0.75, gamma=2.0)], [0.7, 0.3])
 
         torch.manual_seed(42)
         pred = torch.randn(2, 1, 64, 64)
@@ -201,9 +181,7 @@ class TestComboLoss:
 
     def test_combo_loss_initialization_wrong_weights_length(self):
         with pytest.raises(ValueError, match="Number of weights must match"):
-            ComboLoss(
-                [SoftDiceLoss(smooth=1.0), FocalLoss(alpha=0.75, gamma=2.0)], [0.7]
-            )
+            ComboLoss([SoftDiceLoss(smooth=1.0), FocalLoss(alpha=0.75, gamma=2.0)], [0.7])
 
     def test_combo_loss_initialization_negative_weights_sum(self):
         with pytest.raises(ValueError, match="Sum of weights must be positive"):
@@ -238,9 +216,7 @@ class TestComboLoss:
             assert actual == pytest.approx(expected, abs=1e-5)
 
     def test_combo_loss_calculation(self):
-        loss_function = ComboLoss(
-            [MockLoss(0.5), MockLoss(0.3), MockLoss(0.2)], [1.0, 2.0, 3.0]
-        )
+        loss_function = ComboLoss([MockLoss(0.5), MockLoss(0.3), MockLoss(0.2)], [1.0, 2.0, 3.0])
 
         pred = torch.randn(2, 1, 64, 64)
         target = torch.randint(0, 2, (2, 1, 64, 64)).float()
@@ -283,10 +259,7 @@ class TestComboLoss:
         )
         assert total_loss == pytest.approx(weighted, abs=1e-5)
 
-        weighted = (
-            soft_dice_loss * combo_function.weights[0]
-            + focal_loss * combo_function.weights[1]
-        )
+        weighted = soft_dice_loss * combo_function.weights[0] + focal_loss * combo_function.weights[1]
         assert total_loss == pytest.approx(weighted, abs=1e-5)
 
     def test_combo_loss_get_raw_losses(self):
@@ -311,9 +284,7 @@ class TestComboLoss:
 
         assert len(raw_losses) == len(loss_functions)
 
-        assert raw_losses["SoftDiceLoss"].item() == pytest.approx(
-            soft_dice_loss, abs=1e-5
-        )
+        assert raw_losses["SoftDiceLoss"].item() == pytest.approx(soft_dice_loss, abs=1e-5)
         assert raw_losses["FocalLoss"].item() == pytest.approx(focal_loss, abs=1e-5)
 
         assert raw_losses["SoftDiceLoss"].item() >= 0

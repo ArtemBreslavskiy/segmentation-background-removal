@@ -33,9 +33,7 @@ class WeightedDynamicBucketBatchSampler(WeightedRandomSampler):
         if len(weights) == 0:
             raise ValueError("Empty dataset is not allowed")
         if not len(weights) == len(dataset_areas) == len(dataset_aspect_ratios):
-            raise ValueError(
-                "The length of the weights, dataset_areas, and dataset_aspect_ratio lists does not match"
-            )
+            raise ValueError("The length of the weights, dataset_areas, and dataset_aspect_ratio lists does not match")
 
         super().__init__(weights, len(weights), replacement=replacement)
         self.dataset_areas = np.array(dataset_areas)
@@ -86,8 +84,7 @@ class WeightedDynamicBucketBatchSampler(WeightedRandomSampler):
                             )
                     elif len(batch) < self.min_batch_size:
                         warnings.warn(
-                            f"The minimum size batch exceeded the limits, min_batch_size:"
-                            f" {self.min_batch_size}"
+                            f"The minimum size batch exceeded the limits, min_batch_size:" f" {self.min_batch_size}"
                         )
                     else:
                         break
@@ -105,6 +102,4 @@ class WeightedDynamicBucketBatchSampler(WeightedRandomSampler):
             yield b
 
     def __len__(self):
-        raise NotImplementedError(
-            "Number of batches depends on data distribution and cannot be computed in advance"
-        )
+        raise NotImplementedError("Number of batches depends on data distribution and cannot be computed in advance")

@@ -21,12 +21,8 @@ class TestEvaluate:
         mock_logger,
         trained_checkpoint,
     ):
-        mock_paths_with_evaluate.SAVED_CHECKPOINTS = (
-            mock_paths_with_evaluate.base / "checkpoints"
-        )
-        checkpoint_path = (
-            mock_paths_with_evaluate.SAVED_CHECKPOINTS / "test_model_best.pt"
-        )
+        mock_paths_with_evaluate.SAVED_CHECKPOINTS = mock_paths_with_evaluate.base / "checkpoints"
+        checkpoint_path = mock_paths_with_evaluate.SAVED_CHECKPOINTS / "test_model_best.pt"
         checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
         checkpoint_path.write_bytes(trained_checkpoint.read_bytes())
         mock_project_paths_class.return_value = mock_paths_with_evaluate
@@ -50,13 +46,9 @@ class TestEvaluate:
             log_dir=mock_paths_with_evaluate.SAVED_BEST_MODEL_TESTS,
             device="cpu",
         )
-        mock_get_test_loader.assert_called_once_with(
-            full_config, mock_paths_with_evaluate
-        )
+        mock_get_test_loader.assert_called_once_with(full_config, mock_paths_with_evaluate)
         mock_create_metrics.assert_called_once_with(full_config)
-        mock_tester.evaluate.assert_called_once_with(
-            dataloader=mock_dataloader, metrics=mock_metrics
-        )
+        mock_tester.evaluate.assert_called_once_with(dataloader=mock_dataloader, metrics=mock_metrics)
 
         logger.info.assert_any_call("EVALUATION STARTED")
         logger.info.assert_any_call("TEST METRICS RESULTS")
@@ -72,18 +64,14 @@ class TestEvaluate:
         full_config,
         mock_logger,
     ):
-        mock_paths_with_evaluate.SAVED_CHECKPOINTS = (
-            mock_paths_with_evaluate.base / "checkpoints"
-        )
+        mock_paths_with_evaluate.SAVED_CHECKPOINTS = mock_paths_with_evaluate.base / "checkpoints"
         mock_project_paths_class.return_value = mock_paths_with_evaluate
         logger = mock_logger
 
         with pytest.raises(FileNotFoundError, match="Checkpoint not found"):
             evaluate(logger)
 
-        logger.critical.assert_called_once_with(
-            "Evaluation failed. Check error log for details."
-        )
+        logger.critical.assert_called_once_with("Evaluation failed. Check error log for details.")
         logger.exception.assert_called_once()
         call_args = logger.exception.call_args[0][0]
         assert "Checkpoint not found at:" in call_args
@@ -103,12 +91,8 @@ class TestEvaluate:
         mock_logger,
         trained_checkpoint,
     ):
-        mock_paths_with_evaluate.SAVED_CHECKPOINTS = (
-            mock_paths_with_evaluate.base / "checkpoints"
-        )
-        checkpoint_path = (
-            mock_paths_with_evaluate.SAVED_CHECKPOINTS / "test_model_best.pt"
-        )
+        mock_paths_with_evaluate.SAVED_CHECKPOINTS = mock_paths_with_evaluate.base / "checkpoints"
+        checkpoint_path = mock_paths_with_evaluate.SAVED_CHECKPOINTS / "test_model_best.pt"
         checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
         checkpoint_path.write_bytes(trained_checkpoint.read_bytes())
         mock_project_paths_class.return_value = mock_paths_with_evaluate
@@ -120,9 +104,7 @@ class TestEvaluate:
         with pytest.raises(Exception, match="Load failed"):
             evaluate(logger)
 
-        logger.critical.assert_called_once_with(
-            "Evaluating failed. Check error log for details."
-        )
+        logger.critical.assert_called_once_with("Evaluating failed. Check error log for details.")
         logger.exception.assert_called_once_with("Tester loading failed: %s", ANY)
 
     @patch("scripts.evaluate.get_test_dataloader")
@@ -140,12 +122,8 @@ class TestEvaluate:
         mock_logger,
         trained_checkpoint,
     ):
-        mock_paths_with_evaluate.SAVED_CHECKPOINTS = (
-            mock_paths_with_evaluate.base / "checkpoints"
-        )
-        checkpoint_path = (
-            mock_paths_with_evaluate.SAVED_CHECKPOINTS / "test_model_best.pt"
-        )
+        mock_paths_with_evaluate.SAVED_CHECKPOINTS = mock_paths_with_evaluate.base / "checkpoints"
+        checkpoint_path = mock_paths_with_evaluate.SAVED_CHECKPOINTS / "test_model_best.pt"
         checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
         checkpoint_path.write_bytes(trained_checkpoint.read_bytes())
         mock_project_paths_class.return_value = mock_paths_with_evaluate
@@ -162,7 +140,5 @@ class TestEvaluate:
         with pytest.raises(Exception, match="Evaluation error"):
             evaluate(logger)
 
-        logger.error.assert_called_once_with(
-            "Evaluation failed. Check error log for details."
-        )
+        logger.error.assert_called_once_with("Evaluation failed. Check error log for details.")
         logger.exception.assert_called_once_with("Error during evaluation")

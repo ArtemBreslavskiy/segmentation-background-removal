@@ -22,9 +22,7 @@ def create_dataset(
     resize_mode = resize_mode.lower()
     resize_modes = ["resize", "crop"]
     if resize_mode not in resize_modes:
-        raise ValueError(
-            f"Unknown mode: {resize_mode}. Available mods: {resize_modes}"
-        )
+        raise ValueError(f"Unknown mode: {resize_mode}. Available mods: {resize_modes}")
 
     if isinstance(json_path, ProjectPaths):
         if mode == "train":
@@ -40,9 +38,7 @@ def create_dataset(
                 manifest = json.load(f)
         else:
             raise ValueError("Either json_path or manifest must be provided")
-    transforms = (
-        get_train_transforms() if mode == "train" else get_val_test_transforms()
-    )
+    transforms = get_train_transforms() if mode == "train" else get_val_test_transforms()
     dataset_config = config["dataset"]
 
     return BinarySegmentationDataset(

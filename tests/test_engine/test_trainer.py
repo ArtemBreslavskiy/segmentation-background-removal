@@ -12,12 +12,8 @@ from src.losses.ComboLoss import ComboLoss
 class TestTrainer:
 
     @pytest.mark.parametrize("use_scheduler", [True, False])
-    def test_init(
-        self, model, config, loss, optimizer, metrics, log_dir, device, use_scheduler
-    ):
-        scheduler = (
-            optim.lr_scheduler.StepLR(optimizer, step_size=1) if use_scheduler else None
-        )
+    def test_init(self, model, config, loss, optimizer, metrics, log_dir, device, use_scheduler):
+        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=1) if use_scheduler else None
         trainer = Trainer(
             model=model,
             config=config,
@@ -46,9 +42,7 @@ class TestTrainer:
         trainer.fit(train_loader, val_loader, epochs=2, mode=mode)
 
     def test_fit_train_only(self, trainer, train_loader):
-        trainer.fit(
-            train_loader, val_dataloader=None, epochs=1, save_criterion="train/loss"
-        )
+        trainer.fit(train_loader, val_dataloader=None, epochs=1, save_criterion="train/loss")
 
     def test_fit_invalid_mode(self, trainer, train_loader):
         with pytest.raises(ValueError):
@@ -160,9 +154,7 @@ class TestTrainer:
         monkeypatch.setattr("src.utils.factory.create_optimizer", fake_optimizer)
         monkeypatch.setattr("src.utils.factory.create_scheduler", fake_scheduler)
 
-        loaded = Trainer.load_trainer(
-            path, log_dir=trainer.log_dir, device=trainer.device
-        )
+        loaded = Trainer.load_trainer(path, log_dir=trainer.log_dir, device=trainer.device)
 
         assert isinstance(loaded, Trainer)
         assert loaded.current_epoch == trainer.current_epoch
@@ -181,9 +173,7 @@ class TestTrainer:
         assert len(trainer.metrics_history["val"]["loss"]) > 0
 
     @pytest.mark.parametrize("weights", [None, [0.5, 0.5], [2.0, 1.0]])
-    def test_combo_loss_in_training(
-        self, model, config, optimizer, metrics, log_dir, device, train_loader, weights
-    ):
+    def test_combo_loss_in_training(self, model, config, optimizer, metrics, log_dir, device, train_loader, weights):
         loss = ComboLoss([nn.BCEWithLogitsLoss(), nn.L1Loss()], weights=weights)
         trainer = Trainer(
             model=model,
@@ -198,9 +188,7 @@ class TestTrainer:
         assert "loss" in result
         assert isinstance(result["loss"], float)
 
-    def test_combo_loss_components_logged(
-        self, model, config, optimizer, metrics, log_dir, device, train_loader
-    ):
+    def test_combo_loss_components_logged(self, model, config, optimizer, metrics, log_dir, device, train_loader):
         loss = ComboLoss([nn.BCEWithLogitsLoss(), nn.L1Loss()])
         trainer = Trainer(
             model=model,

@@ -34,9 +34,7 @@ class Tester(BaseModule):
             logger=logger,
         )
 
-    def evaluate(
-        self, dataloader: data.DataLoader, metrics: Dict[str, torchmetrics.Metric]
-    ) -> Dict[str, float]:
+    def evaluate(self, dataloader: data.DataLoader, metrics: Dict[str, torchmetrics.Metric]) -> Dict[str, float]:
 
         if len(dataloader) == 0:
             error_msg = "Test dataloader is empty"
@@ -57,10 +55,7 @@ class Tester(BaseModule):
 
     def _save_metrics(self, metrics: Dict):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = (
-            self.log_dir
-            / f"{self.model_name}_test_{self.current_epoch+1}_{timestamp}.pt"
-        )
+        filename = self.log_dir / f"{self.model_name}_test_{self.current_epoch+1}_{timestamp}.pt"
         torch.save(metrics, filename)
         self.logger.debug("Test metrics saved to %s", filename)
 
@@ -76,9 +71,7 @@ class Tester(BaseModule):
 
         config = checkpoint["config"]
         if config is None:
-            raise ValueError(
-                "Checkpoint does not contain config. Cannot restore components."
-            )
+            raise ValueError("Checkpoint does not contain config. Cannot restore components.")
 
         from src.utils.factories.loss_fn_factory import create_loss
         from src.utils.factories.metrics_factory import create_metrics
@@ -99,9 +92,7 @@ class Tester(BaseModule):
             logger=logger,
         )
         tester.model.load_state_dict(checkpoint["model_state_dict"])
-        tester.metrics = {
-            name: metric.to(tester.device) for name, metric in tester.metrics.items()
-        }
+        tester.metrics = {name: metric.to(tester.device) for name, metric in tester.metrics.items()}
         tester.metrics_history = checkpoint["metrics_history"]
         tester.current_epoch = checkpoint["epoch"]
 

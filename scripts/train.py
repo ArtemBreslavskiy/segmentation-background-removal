@@ -39,11 +39,7 @@ def train(config: Dict, logger: Optional[logging.Logger] = None):
 
     model_name = config["model"]["model_name"]
     log_dir = path.SAVED_CHECKPOINTS
-    device = (
-        "cuda"
-        if config["learning"]["use_cuda"] and torch.cuda.is_available()
-        else "cpu"
-    )
+    device = "cuda" if config["learning"]["use_cuda"] and torch.cuda.is_available() else "cpu"
     logger.info("Using device: %s", device)
     if device == "cuda":
         logger.info("GPU: %s", torch.cuda.get_device_name(0))
@@ -68,9 +64,7 @@ def train(config: Dict, logger: Optional[logging.Logger] = None):
     logger.info("Metrics initialized: %s", list(metrics.keys()))
 
     scheduler = create_scheduler(config, optimizer)
-    logger.info(
-        "Learning rate scheduler created: %s", config["learning"]["scheduler"]["class"]
-    )
+    logger.info("Learning rate scheduler created: %s", config["learning"]["scheduler"]["class"])
 
     collate_fn = get_padding_fn(config)
 
@@ -137,9 +131,7 @@ def train(config: Dict, logger: Optional[logging.Logger] = None):
     logger.info("=" * 60)
     logger.info("Total epochs: %d", config["learning"]["epochs"])
     logger.info("Save criterion: %s", config["learning"]["save_criterion"])
-    logger.info(
-        "Early stopping patience: %d", config["learning"]["early_stopping_patience"]
-    )
+    logger.info("Early stopping patience: %d", config["learning"]["early_stopping_patience"])
     logger.info("Log interval: %d", config["learning"]["log_interval"])
     logger.info("Accumulation_steps: %d", config["learning"]["accumulation_steps"])
 

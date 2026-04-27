@@ -8,6 +8,4 @@ def create_batch_sampler(config: Dict, **override_kwargs):
     if sampler_config is None:
         return None
     BatchSamplerClass = get_class(sampler_config["class"])
-    return BatchSamplerClass(
-        **convert_value(sampler_config["params"]), **override_kwargs
-    )
+    return BatchSamplerClass(**convert_value(sampler_config["params"]), **override_kwargs)

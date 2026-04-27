@@ -29,9 +29,7 @@ class TestDataLoaders:
     @patch("data.dataloaders.get_train_dataset")
     @patch("data.dataloaders.get_val_dataset")
     @patch("data.dataloaders.get_test_dataset")
-    def test_get_dataloader_train_mode(
-        self, mock_get_test, mock_get_val, mock_get_train, full_config, mock_paths
-    ):
+    def test_get_dataloader_train_mode(self, mock_get_test, mock_get_val, mock_get_train, full_config, mock_paths):
         config: dict = full_config.copy()
         config["dataloader"] = config["dataloader"].copy()
         config["dataloader"]["num_workers"] = 2
@@ -63,9 +61,7 @@ class TestDataLoaders:
     @patch("data.dataloaders.get_train_dataset")
     @patch("data.dataloaders.get_val_dataset")
     @patch("data.dataloaders.get_test_dataset")
-    def test_get_dataloader_val_mode(
-        self, mock_get_test, mock_get_val, mock_get_train, full_config, mock_paths
-    ):
+    def test_get_dataloader_val_mode(self, mock_get_test, mock_get_val, mock_get_train, full_config, mock_paths):
         mock_dataset = MagicMock()
         mock_dataset.__len__.return_value = 100
         mock_get_val.return_value = mock_dataset
@@ -84,9 +80,7 @@ class TestDataLoaders:
     @patch("data.dataloaders.get_train_dataset")
     @patch("data.dataloaders.get_val_dataset")
     @patch("data.dataloaders.get_test_dataset")
-    def test_get_dataloader_test_mode(
-        self, mock_get_test, mock_get_val, mock_get_train, full_config, mock_paths
-    ):
+    def test_get_dataloader_test_mode(self, mock_get_test, mock_get_val, mock_get_train, full_config, mock_paths):
         mock_dataset = MagicMock()
         mock_dataset.__len__.return_value = 100
         mock_get_test.return_value = mock_dataset
@@ -136,25 +130,19 @@ class TestDataLoaders:
         with patch("data.dataloaders.get_dataloader") as mock_get_dataloader:
             mock_get_dataloader.return_value = MagicMock()
             result = get_train_dataloader(full_config, mock_paths)
-            mock_get_dataloader.assert_called_once_with(
-                config=full_config, path=mock_paths, mode="train"
-            )
+            mock_get_dataloader.assert_called_once_with(config=full_config, path=mock_paths, mode="train")
             assert result == mock_get_dataloader.return_value
 
     def test_get_val_dataloader(self, full_config, mock_paths):
         with patch("data.dataloaders.get_dataloader") as mock_get_dataloader:
             mock_get_dataloader.return_value = MagicMock()
             result = get_val_dataloader(full_config, mock_paths)
-            mock_get_dataloader.assert_called_once_with(
-                config=full_config, path=mock_paths, mode="val"
-            )
+            mock_get_dataloader.assert_called_once_with(config=full_config, path=mock_paths, mode="val")
             assert result == mock_get_dataloader.return_value
 
     def test_get_test_dataloader(self, full_config, mock_paths):
         with patch("data.dataloaders.get_dataloader") as mock_get_dataloader:
             mock_get_dataloader.return_value = MagicMock()
             result = get_test_dataloader(full_config, mock_paths)
-            mock_get_dataloader.assert_called_once_with(
-                config=full_config, path=mock_paths, mode="test"
-            )
+            mock_get_dataloader.assert_called_once_with(config=full_config, path=mock_paths, mode="test")
             assert result == mock_get_dataloader.return_value

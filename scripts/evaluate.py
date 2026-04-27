@@ -31,11 +31,7 @@ def evaluate(config: Dict, logger: Optional[logging.Logger] = None):
     model_name = config["model"]["model_name"]
     saved_path = path.SAVED_CHECKPOINTS / f"{model_name}_best.pt"
     log_dir = path.SAVED_BEST_MODEL_TESTS
-    device = (
-        "cuda"
-        if config["learning"]["use_cuda"] and torch.cuda.is_available()
-        else "cpu"
-    )
+    device = "cuda" if config["learning"]["use_cuda"] and torch.cuda.is_available() else "cpu"
     logger.info("Using device: %s", device)
     if device == "cuda":
         logger.info("GPU: %s", torch.cuda.get_device_name(0))

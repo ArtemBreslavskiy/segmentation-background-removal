@@ -54,9 +54,7 @@ class DeepLabV3Plus(nn.Module):
             elif hasattr(self.model.encoder, "gradient_checkpointing"):
                 self.model.encoder.gradient_checkpointing = True
             else:
-                print(
-                    "Warning: Gradient checkpointing could not be enabled for this encoder."
-                )
+                print("Warning: Gradient checkpointing could not be enabled for this encoder.")
 
     def _replace_bn_with_gn(
         self,

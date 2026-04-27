@@ -63,17 +63,11 @@ def create_dataloader(
 
     if batch_sampler is not None:
         if batch_size is not None or shuffle is not None:
-            raise ValueError(
-                "When batch_sampler is provided, batch_size and shuffle must be None/null in config."
-            )
+            raise ValueError("When batch_sampler is provided, batch_size and shuffle must be None/null in config.")
     elif batch_size is None:
-        raise ValueError(
-            "batch_size must be set in config when batch_sampler is not used."
-        )
+        raise ValueError("batch_size must be set in config when batch_sampler is not used.")
     elif shuffle is None:
-        raise ValueError(
-            "shuffle must be set in config when batch_sampler is not used."
-        )
+        raise ValueError("shuffle must be set in config when batch_sampler is not used.")
 
     if mode == "train":
         dataset = create_train_dataset(config, manifest=manifest, resize_mode=resize_mode)
@@ -101,12 +95,8 @@ def create_dataloader(
                 "num_workers": num_workers,
                 "worker_init_fn": seed_worker,
                 "pin_memory": config.get("dataloader", {}).get("pin_memory", True),
-                "persistent_workers": config.get("dataloader", {}).get(
-                    "persistent_workers", False
-                ),
-                "prefetch_factor": config.get("dataloader", {}).get(
-                    "prefetch_factor", 2
-                ),
+                "persistent_workers": config.get("dataloader", {}).get("persistent_workers", False),
+                "prefetch_factor": config.get("dataloader", {}).get("prefetch_factor", 2),
             }
         )
 

@@ -64,9 +64,7 @@ class TestFactory:
                 "scheduler": {"step_size": "10"},
             }
         }
-        expected = {
-            "params": {"lr": 0.001, "batch_size": 32, "scheduler": {"step_size": 10}}
-        }
+        expected = {"params": {"lr": 0.001, "batch_size": 32, "scheduler": {"step_size": 10}}}
         assert _convert_value(input_data) == expected
 
     @patch("src.utils.factory._get_class")
@@ -88,9 +86,7 @@ class TestFactory:
 
         result = create_optimizer(full_config, model)
 
-        mock_get_class.assert_called_once_with(
-            full_config["learning"]["optimizer"]["class"]
-        )
+        mock_get_class.assert_called_once_with(full_config["learning"]["optimizer"]["class"])
         expected_params = _convert_value(full_config["learning"]["optimizer"]["params"])
         mock_class.assert_called_once_with(ANY, **expected_params)
         assert result == mock_class.return_value
@@ -151,12 +147,8 @@ class TestFactory:
         assert result["accuracy"] == mock_metric1.return_value
         assert result["iou"] == mock_metric2.return_value
 
-        expected_params1 = _convert_value(
-            full_config["evaluating"]["metrics"][0]["params"]
-        )
-        expected_params2 = _convert_value(
-            full_config["evaluating"]["metrics"][1]["params"]
-        )
+        expected_params1 = _convert_value(full_config["evaluating"]["metrics"][0]["params"])
+        expected_params2 = _convert_value(full_config["evaluating"]["metrics"][1]["params"])
 
         mock_metric1.assert_called_once_with(**expected_params1)
         mock_metric2.assert_called_once_with(**expected_params2)
@@ -168,9 +160,7 @@ class TestFactory:
 
         result = create_scheduler(full_config, optimizer)
 
-        mock_get_class.assert_called_once_with(
-            full_config["learning"]["scheduler"]["class"]
-        )
+        mock_get_class.assert_called_once_with(full_config["learning"]["scheduler"]["class"])
         expected_params = _convert_value(full_config["learning"]["scheduler"]["params"])
         mock_scheduler_class.assert_called_once_with(optimizer, **expected_params)
         assert result == mock_scheduler_class.return_value

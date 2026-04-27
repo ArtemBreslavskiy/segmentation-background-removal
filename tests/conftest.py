@@ -34,9 +34,7 @@ class DummyDataset(data.Dataset):
 class DummyModel(nn.Module):
     def __init__(self):
         super().__init__()
-        self.net = nn.Sequential(
-            nn.Conv2d(1, 4, 3, padding=1), nn.ReLU(), nn.Conv2d(4, 1, 1)
-        )
+        self.net = nn.Sequential(nn.Conv2d(1, 4, 3, padding=1), nn.ReLU(), nn.Conv2d(4, 1, 1))
 
     def forward(self, x):
         return self.net(x)
@@ -50,9 +48,7 @@ def binary_dataset_path(tmp_path):
     masks_dir.mkdir()
     for i in range(1, 4):
         img = np.random.randint(0, 256, (64, 64, 3), dtype=np.uint8)
-        cv2.imwrite(
-            str(images_dir / f"img_{i}.png"), cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
-        )
+        cv2.imwrite(str(images_dir / f"img_{i}.png"), cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
         mask = np.random.choice([0, 255], (64, 64), p=[0.7, 0.3]).astype(np.uint8)
         cv2.imwrite(str(masks_dir / f"mask_{i}.png"), mask)
     return tmp_path
@@ -381,9 +377,7 @@ def trained_checkpoint(tmp_path, trainer):
             "best_value": float("inf"),
             "model_state_dict": trainer.model.state_dict(),
             "optimizer_state_dict": trainer.optimizer.state_dict(),
-            "scheduler_state_dict": (
-                trainer.scheduler.state_dict() if trainer.scheduler else None
-            ),
+            "scheduler_state_dict": (trainer.scheduler.state_dict() if trainer.scheduler else None),
             "metrics_history": trainer.metrics_history,
             "config": trainer.config,
         },

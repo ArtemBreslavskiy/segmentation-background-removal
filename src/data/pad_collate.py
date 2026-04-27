@@ -54,6 +54,4 @@ def pad_collate(
         padded_masks.append(mask_pad)
         padded_valid.append(valid_pad)
 
-    return (torch.stack(padded_images, dim=0),
-            torch.stack(padded_masks, dim=0),
-            torch.stack(padded_valid, dim=0))
+    return (torch.stack(padded_images, dim=0), torch.stack(padded_masks, dim=0), torch.stack(padded_valid, dim=0))

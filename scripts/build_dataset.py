@@ -56,9 +56,7 @@ def build_processed_dataset(config: Dict, logger: Optional[logging.Logger] = Non
         msg = "The multi-dataset contains: " + ", ".join(datasets_names) + "."
     logger.info(msg)
 
-    def search_correct_directories(
-        path: Path, criteria: Callable[[Path], bool]
-    ) -> List[Path]:
+    def search_correct_directories(path: Path, criteria: Callable[[Path], bool]) -> List[Path]:
         if not path.is_dir():
             return []
         correct_directories = []
@@ -127,14 +125,10 @@ def build_processed_dataset(config: Dict, logger: Optional[logging.Logger] = Non
 
     def validate_pair(image_dir: Path, mask_dir: Path) -> bool:
         image_stems = {
-            p.stem
-            for p in image_dir.rglob("*")
-            if p.is_file() and p.suffix.lower() in {".jpg", ".jpeg", ".png"}
+            p.stem for p in image_dir.rglob("*") if p.is_file() and p.suffix.lower() in {".jpg", ".jpeg", ".png"}
         }
         mask_stems = {
-            p.stem
-            for p in mask_dir.rglob("*")
-            if p.is_file() and p.suffix.lower() in {".jpg", ".jpeg", ".png"}
+            p.stem for p in mask_dir.rglob("*") if p.is_file() and p.suffix.lower() in {".jpg", ".jpeg", ".png"}
         }
         return not image_stems.isdisjoint(mask_stems)
 
@@ -149,12 +143,8 @@ def build_processed_dataset(config: Dict, logger: Optional[logging.Logger] = Non
         logger.info("Data structure recognition...")
         datasets = {}
         for dataset_path in datasets_paths:
-            image_dirs = search_correct_directories(
-                dataset_path, image_directory_criteria
-            )
-            mask_dirs = search_correct_directories(
-                dataset_path, mask_directory_criteria
-            )
+            image_dirs = search_correct_directories(dataset_path, image_directory_criteria)
+            mask_dirs = search_correct_directories(dataset_path, mask_directory_criteria)
             if len(image_dirs) != len(mask_dirs):
                 logger.warning(
                     f"Mismatch in {dataset_path.name}: {len(image_dirs)} "
@@ -179,9 +169,7 @@ def build_processed_dataset(config: Dict, logger: Optional[logging.Logger] = Non
                                 )
                                 break
                         else:
-                            logger.debug(
-                                f"Skipped pair: {image_path.name} + {mask_path.name} (no common files)"
-                            )
+                            logger.debug(f"Skipped pair: {image_path.name} + {mask_path.name} (no common files)")
             if not datasets[dataset_path.name]:
                 logger.warning(
                     "No file pairs were built for dataset %s. Check directory structure and file names.",
@@ -191,9 +179,7 @@ def build_processed_dataset(config: Dict, logger: Optional[logging.Logger] = Non
         for name, pairs in datasets.items():
             logger.debug("%s contains %d pairs", name, len(pairs))
         data_paths_lst = [
-            (image_path, mask_path, source)
-            for source, pair in datasets.items()
-            for image_path, mask_path in pair
+            (image_path, mask_path, source) for source, pair in datasets.items() for image_path, mask_path in pair
         ]
 
         logger.info("Splitting dataset into train/val...")
@@ -236,9 +222,7 @@ def build_processed_dataset(config: Dict, logger: Optional[logging.Logger] = Non
                     }
                 )
             if skipped > 0:
-                logger.warning(
-                    f"Skipped {skipped} pairs due to image read errors in {filepath}"
-                )
+                logger.warning(f"Skipped {skipped} pairs due to image read errors in {filepath}")
             with open(filepath, "w", encoding="utf-8") as f:
                 json.dump(manifest, f, indent=2, ensure_ascii=False)
 

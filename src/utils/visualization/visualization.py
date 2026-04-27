@@ -44,10 +44,7 @@ def visualization(checkpoints_path: Union[Path, str], tests_path: Union[Path, st
                 out_test.clear_output(wait=True)
                 fig, ax = plt.subplots(figsize=(10, 5))
                 names = list(metrics.keys())
-                values = [
-                    metrics[k] if isinstance(metrics[k], (int, float)) else 0
-                    for k in names
-                ]
+                values = [metrics[k] if isinstance(metrics[k], (int, float)) else 0 for k in names]
                 ax.bar(names, values, color="skyblue", edgecolor="navy")
                 ax.set_ylabel("Value")
                 ax.set_title(f"Test metrics for file: {file_path.name}")
@@ -56,10 +53,7 @@ def visualization(checkpoints_path: Union[Path, str], tests_path: Union[Path, st
                 display(fig)
                 plt.close(fig)
         except Exception as ex:
-            print(
-                f"Error processing test metrics from file {file_path}: {ex}. "
-                "File skipped."
-            )
+            print(f"Error processing test metrics from file {file_path}: {ex}. " "File skipped.")
 
     try:
         checkpoint = torch.load(checkpoints_path, weights_only=False)
@@ -83,9 +77,7 @@ def visualization(checkpoints_path: Union[Path, str], tests_path: Union[Path, st
         description="Metric:",
         disabled=False,
     )
-    train_val_metric_selector.observe(
-        lambda change: plot_train_val(change["new"]), names="value"
-    )
+    train_val_metric_selector.observe(lambda change: plot_train_val(change["new"]), names="value")
 
     tab1 = widgets.VBox([train_val_metric_selector, out_train_val])
 
@@ -99,9 +91,7 @@ def visualization(checkpoints_path: Union[Path, str], tests_path: Union[Path, st
             description="File:",
             disabled=False,
         )
-        test_metric_selector.observe(
-            lambda change: show_test(change["new"]), names="value"
-        )
+        test_metric_selector.observe(lambda change: show_test(change["new"]), names="value")
 
         tab2 = widgets.VBox([test_metric_selector, out_test])
 

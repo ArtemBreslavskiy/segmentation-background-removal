@@ -101,9 +101,7 @@ class TestTrain:
         mock_trainer.load_checkpoint.assert_called_once_with(
             path=checkpoint_path, load_optimizer=True, load_scheduler=True
         )
-        logger.info.assert_any_call(
-            "Resuming from epoch: %d", mock_trainer.current_epoch
-        )
+        logger.info.assert_any_call("Resuming from epoch: %d", mock_trainer.current_epoch)
 
     @patch("scripts.train.get_train_dataloader")
     @patch("scripts.train.get_val_dataloader")
@@ -176,9 +174,7 @@ class TestTrain:
             with pytest.raises(RuntimeError, match="Training error"):
                 train(logger)
 
-        logger.critical.assert_called_once_with(
-            "Training failed. Check error log for details."
-        )
+        logger.critical.assert_called_once_with("Training failed. Check error log for details.")
         logger.exception.assert_called_once_with("Fatal error during training: %s", ANY)
 
     @patch("scripts.train.get_train_dataloader")
@@ -254,12 +250,8 @@ class TestTrain:
             with pytest.raises(Exception, match="Init failed"):
                 train(logger)
 
-        logger.critical.assert_called_once_with(
-            "Training failed. Check error log for details."
-        )
-        logger.exception.assert_called_once_with(
-            "Trainer initialization failed: %s", ANY
-        )
+        logger.critical.assert_called_once_with("Training failed. Check error log for details.")
+        logger.exception.assert_called_once_with("Trainer initialization failed: %s", ANY)
 
     @patch("scripts.train.get_train_dataloader")
     @patch("scripts.train.get_val_dataloader")
@@ -300,7 +292,5 @@ class TestTrain:
             with pytest.raises(Exception, match="Load failed"):
                 train(logger)
 
-        logger.critical.assert_called_once_with(
-            "Training failed. Check error log for details."
-        )
+        logger.critical.assert_called_once_with("Training failed. Check error log for details.")
         logger.exception.assert_called_once_with("Failed to load checkpoint: %s", ANY)

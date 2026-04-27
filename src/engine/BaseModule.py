@@ -43,9 +43,7 @@ class BaseModule(ABC):
         if metrics is None or metrics == {}:
             self.metrics = {}
         else:
-            self.metrics = {
-                name: metric.to(self.device) for name, metric in metrics.items()
-            }
+            self.metrics = {name: metric.to(self.device) for name, metric in metrics.items()}
         if model_name:
             self.model_name = model_name
         else:
@@ -53,9 +51,7 @@ class BaseModule(ABC):
         if self.config["learning"].get("compile_model", False):
             compile_dynamic = self.config["learning"].get("compile_dynamic", True)
             compile_options = self.config["learning"].get("compile_options", "default")
-            self.model = torch.compile(
-                self.model, dynamic=compile_dynamic, mode=compile_options
-            )
+            self.model = torch.compile(self.model, dynamic=compile_dynamic, mode=compile_options)
 
     def _device_validate(self, device: Union[torch.device, str, None]):
         if device is None:
@@ -107,10 +103,7 @@ class BaseModule(ABC):
             if "image" in batch and "mask" in batch:
                 return batch["image"], batch["mask"]
             else:
-                error_msg = (
-                    f"Dictionary must contain keys 'image' and 'mask', "
-                    f"got {batch.keys()}"
-                )
+                error_msg = f"Dictionary must contain keys 'image' and 'mask', " f"got {batch.keys()}"
                 self.logger.exception(error_msg)
                 raise ValueError(error_msg)
 
@@ -159,9 +152,7 @@ class BaseModule(ABC):
 
     def _compute_loss(self, predictions, targets, return_components=False):
         if hasattr(self.loss_function, "forward_with_components") and return_components:
-            total_loss, components = self.loss_function.forward_with_components(
-                predictions, targets
-            )
+            total_loss, components = self.loss_function.forward_with_components(predictions, targets)
             return total_loss, components
         else:
             loss = self.loss_function(predictions, targets)
@@ -192,9 +183,7 @@ class BaseModule(ABC):
             self.logger.exception(error_msg)
             raise ValueError(error_msg)
 
-        current_metrics = (
-            self.metrics if metrics is None or mode in ["train", "val"] else metrics
-        )
+        current_metrics = self.metrics if metrics is None or mode in ["train", "val"] else metrics
 
         if dataloader is None:
             error_msg = "dataloader cannot be None"
@@ -230,11 +219,7 @@ class BaseModule(ABC):
             total_components = {name: 0.0 for name in self.loss_function.names}
         else:
             total_components = {"loss": 0.0}
-        desc = (
-            "Evaluating..."
-            if mode == "test"
-            else f"{mode.capitalize()} Epoch {self.current_epoch}"
-        )
+        desc = "Evaluating..." if mode == "test" else f"{mode.capitalize()} Epoch {self.current_epoch}"
         pbar = tqdm(dataloader, desc=desc, leave=True)
 
         with grad_context:
@@ -243,7 +228,7 @@ class BaseModule(ABC):
             for batch in pbar:
                 try:
                     batch = self._move_batch_to_device(batch)
-                    x, y, valid_mask = (self._unpack_batch(batch))
+                    x, y, valid_mask = self._unpack_batch(batch)
                     if valid_mask is not None:
                         num_pixels = valid_mask.sum().item()
                     else:
@@ -251,9 +236,7 @@ class BaseModule(ABC):
 
                     with autocast(self.config["learning"].get("use_fp16", False)):
                         predictions = self.model(x)
-                        loss, components = self._compute_loss(
-                            predictions, y, return_components=True
-                        )
+                        loss, components = self._compute_loss(predictions, y, return_components=True)
 
                     if train:
                         if use_pixels_accumulation:
@@ -286,9 +269,7 @@ class BaseModule(ABC):
                         {
                             "loss": f"{loss.item():.4f}",
                             "speed": (
-                                f"{num_batches / (time.time() - start_time):.1f} it/s"
-                                if num_batches > 0
-                                else "N/A"
+                                f"{num_batches / (time.time() - start_time):.1f} it/s" if num_batches > 0 else "N/A"
                             ),
                         }
                     )
@@ -311,11 +292,7 @@ class BaseModule(ABC):
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
                 self.optimizer.zero_grad()
-            elif (
-                train
-                and not use_pixels_accumulation
-                and num_batches % accumulation_steps != 0
-            ):
+            elif train and not use_pixels_accumulation and num_batches % accumulation_steps != 0:
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
                 self.optimizer.zero_grad()
@@ -329,8 +306,7 @@ class BaseModule(ABC):
             memory_after = torch.cuda.memory_allocated() / 1024**2
             peak_memory = torch.cuda.max_memory_allocated() / 1024**2
             self.logger.debug(
-                f"{mode.capitalize()} memory - Final: {memory_after:.1f}MB, "
-                f"Peak: {peak_memory:.1f}MB"
+                f"{mode.capitalize()} memory - Final: {memory_after:.1f}MB, " f"Peak: {peak_memory:.1f}MB"
             )
 
         elapsed_time = time.time() - start_time
@@ -341,14 +317,10 @@ class BaseModule(ABC):
         )
 
         avg_loss = total_loss / num_batches
-        avg_components = {
-            name: total / num_batches for name, total in total_components.items()
-        }
+        avg_components = {name: total / num_batches for name, total in total_components.items()}
         metrics_values = self._compute_metrics(current_metrics)
 
         metrics_str = ", ".join([f"{k}={v:.4f}" for k, v in metrics_values.items()])
-        self.logger.info(
-            f"{mode.capitalize()} completed: loss={avg_loss:.4f}, {metrics_str}"
-        )
+        self.logger.info(f"{mode.capitalize()} completed: loss={avg_loss:.4f}, {metrics_str}")
 
         return {"loss": avg_loss, **metrics_values, **avg_components}

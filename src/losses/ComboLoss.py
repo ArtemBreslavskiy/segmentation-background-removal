@@ -43,10 +43,7 @@ class ComboLoss(nn.Module):
         return sum(weighted), raw
 
     def get_raw_losses(self, *args, **kwargs):
-        return {
-            name: lf(*args, **kwargs)
-            for name, lf in zip(self.names, self.loss_functions)
-        }
+        return {name: lf(*args, **kwargs) for name, lf in zip(self.names, self.loss_functions)}
 
     @property
     def names(self):

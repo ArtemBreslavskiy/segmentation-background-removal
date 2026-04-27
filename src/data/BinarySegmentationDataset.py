@@ -21,9 +21,7 @@ class BinarySegmentationDataset(data.Dataset):
         resize_mode = resize_mode.lower()
         resize_modes = ["resize", "crop"]
         if resize_mode not in resize_modes:
-            raise ValueError(
-                f"Unknown mode: {resize_mode}. Available mods: {resize_modes}"
-            )
+            raise ValueError(f"Unknown mode: {resize_mode}. Available mods: {resize_modes}")
         if not manifest:
             if json_path:
                 with open(json_path, "r", encoding="utf-8") as f:
@@ -61,12 +59,8 @@ class BinarySegmentationDataset(data.Dataset):
                 new_h = int(h * scale)
                 new_w = int(w * scale)
                 if self.resize_mode == "resize":
-                    image = cv2.resize(
-                        image, (new_w, new_h), interpolation=cv2.INTER_LINEAR
-                    )
-                    mask = cv2.resize(
-                        mask, (new_w, new_h), interpolation=cv2.INTER_NEAREST
-                    )
+                    image = cv2.resize(image, (new_w, new_h), interpolation=cv2.INTER_LINEAR)
+                    mask = cv2.resize(mask, (new_w, new_h), interpolation=cv2.INTER_NEAREST)
                 elif self.resize_mode == "crop":
                     crop = A.RandomCrop(height=new_h, width=new_w, p=1.0)
                     transformed = crop(image=image, mask=mask)
@@ -83,10 +77,7 @@ class BinarySegmentationDataset(data.Dataset):
                     image = transformed["image"]
                     mask = transformed["mask"]
 
-                if (
-                    "photometric" in self.transforms
-                    and self.transforms["photometric"] is not None
-                ):
+                if "photometric" in self.transforms and self.transforms["photometric"] is not None:
                     image = self.transforms["photometric"](image=image)["image"]
 
                 if "final_image" in self.transforms:
