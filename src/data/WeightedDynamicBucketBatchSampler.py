@@ -48,7 +48,7 @@ class WeightedDynamicBucketBatchSampler(WeightedRandomSampler):
         self.length = len(weights)
 
     def __iter__(self):
-        sampled_indices = np.array(super().__iter__())
+        sampled_indices = np.array(list(super().__iter__()))
         areas = self.dataset_areas[sampled_indices]
         aspect_ratios = self.dataset_aspect_ratios[sampled_indices]
         # We sort first by aspect ratio, then by area.

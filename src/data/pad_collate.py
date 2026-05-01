@@ -6,10 +6,13 @@ import torch.nn.functional as F
 
 
 def pad_collate(
-    batch: List[Tuple[Union[torch.Tensor, np.ndarray]]],
+    batch: List[Tuple[Union[torch.Tensor, ]]],
     alignment: int = 32,
     pad_value: float = 0.0,
-) -> Tuple[torch.Tensor, torch.Tensor]:
+) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    if not batch:
+        raise ValueError("Butch cannot be empty")
+
     max_h, max_w = 0, 0
     images = []
     masks = []

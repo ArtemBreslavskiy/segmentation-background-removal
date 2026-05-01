@@ -6,7 +6,7 @@ from src.losses.FocalLoss import FocalLoss
 
 
 class TestFocalLoss:
-    def test_focal_loss_returns_float(self):
+    def test_returns_float(self):
         loss_function = FocalLoss(alpha=0.75, gamma=2.0)
 
         pred = torch.randn(2, 1, 64, 64)
@@ -18,7 +18,7 @@ class TestFocalLoss:
         assert loss.dim() == 0
         assert loss.item() >= 0
 
-    def test_focal_loss_perfect_match(self):
+    def test_perfect_match(self):
         loss_function = FocalLoss(alpha=0.75, gamma=2.0)
 
         pred_ones = torch.ones(2, 1, 64, 64) * 100
@@ -33,7 +33,7 @@ class TestFocalLoss:
         assert loss_one.item() == pytest.approx(0.0, abs=1e-3)
         assert loss_zero.item() == pytest.approx(0.0, abs=1e-3)
 
-    def test_focal_loss_perfect_mismatch(self):
+    def test_perfect_mismatch(self):
         loss_function = FocalLoss(alpha=0.75, gamma=2.0)
 
         pred_ones = torch.ones(2, 1, 64, 64) * 100
@@ -49,7 +49,7 @@ class TestFocalLoss:
         assert loss_mismatch_1.item() > loss_smatch
         assert loss_mismatch_2.item() > loss_smatch
 
-    def test_focal_loss_gradients(self):
+    def test_gradients(self):
         loss_function = FocalLoss(alpha=0.75, gamma=2.0)
 
         pred = torch.randn(2, 1, 64, 64, requires_grad=True)
@@ -63,7 +63,7 @@ class TestFocalLoss:
         assert pred.grad.shape == pred.shape
 
     @pytest.mark.parametrize("batch_size", list(range(1, 33)))
-    def test_focal_loss_different_batch_sizes(self, batch_size):
+    def test_different_batch_sizes(self, batch_size):
         loss_function = FocalLoss(alpha=0.75, gamma=2.0)
 
         pred = torch.randn(batch_size, 1, 64, 64)
@@ -77,7 +77,7 @@ class TestFocalLoss:
         "height, width",
         [(i, j) for i in range(32, 513, 32) for j in range(32, 513, 32)],
     )
-    def test_focal_loss_different_resolutions(self, height, width):
+    def test_different_resolutions(self, height, width):
         loss_function = FocalLoss(alpha=0.75, gamma=2.0)
 
         pred = torch.randn(2, 1, height, width)
@@ -89,7 +89,7 @@ class TestFocalLoss:
         assert loss.item() >= 0
 
     @pytest.mark.parametrize("alpha", np.arange(0.05, 1, 0.05))
-    def test_focal_loss_different_alpha(self, alpha):
+    def test_different_alpha(self, alpha):
         loss_function = FocalLoss(alpha=alpha, gamma=2.0)
 
         pred_ones = torch.ones(2, 1, 64, 64) * 100
@@ -105,7 +105,7 @@ class TestFocalLoss:
         assert loss_zero.item() == pytest.approx(0.0, abs=1e-3)
         assert loss_one.item() == pytest.approx(0.0, abs=1e-3)
 
-    def test_focal_loss_alpha_monotonic(self):
+    def test_alpha_monotonic(self):
         loss_functions = [FocalLoss(alpha=alpha, gamma=2.0) for alpha in np.arange(0.0, 1.0, 0.05)]
 
         pred_uncertain = torch.zeros(2, 1, 64, 64)
@@ -116,7 +116,7 @@ class TestFocalLoss:
         for i in range(1, len(losses)):
             assert losses[i - 1] <= losses[i] + 1e-5
 
-    def test_focal_loss_gamma_monotonic(self):
+    def test_gamma_monotonic(self):
         loss_functions = [FocalLoss(alpha=0.75, gamma=gamma) for gamma in np.arange(0.0, 5.0, 0.1)]
 
         pred = torch.ones(2, 1, 64, 64) * 2
@@ -127,7 +127,7 @@ class TestFocalLoss:
         for i in range(1, len(losses)):
             assert losses[i] <= losses[i - 1] + 1e-5
 
-    def test_focal_loss_extreme_value(self):
+    def test_extreme_value(self):
         loss_function = FocalLoss(alpha=0.75, gamma=2.0)
 
         pred_big = torch.ones(2, 1, 64, 64) * 1e6
@@ -151,7 +151,7 @@ class TestFocalLoss:
         assert loss_one_1.item() >= 0
         assert loss_one_2.item() >= 0
 
-    def test_focal_loss_monotonic(self):
+    def test_monotonic(self):
         loss_function = FocalLoss(alpha=0.75, gamma=2.0)
 
         preds = [torch.ones(2, 1, 64, 64) * v for v in range(-100, 101)]
@@ -161,7 +161,7 @@ class TestFocalLoss:
         for i in range(1, len(losses)):
             assert losses[i] <= losses[i - 1] + 1e-5
 
-    def test_focal_loss_reproducibility(self):
+    def test_reproducibility(self):
         loss_function = FocalLoss(alpha=0.75, gamma=2.0)
 
         torch.manual_seed(42)
@@ -173,7 +173,7 @@ class TestFocalLoss:
 
         assert loss1.item() == pytest.approx(loss2.item(), abs=1e-10)
 
-    def test_focal_loss_compared_to_bce(self):
+    def test_compared_to_bce(self):
         focal_loss_function = FocalLoss(alpha=0.5, gamma=2.0)
         bce_loss_function = torch.nn.BCEWithLogitsLoss()
 

@@ -1,433 +1,288 @@
-from typing import Dict
-from unittest.mock import MagicMock
-
-import albumentations as A
-import cv2
-import numpy as np
-import pytest
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.utils.data as data
 import torchmetrics
+import pytest
+import numpy as np
+import cv2
+import logging
 import yaml
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
+from pathlib import Path
 
-from src.data.BinarySegmentationDataset import BinarySegmentationDataset
-from src.engine.Tester import Tester
+from src.engine.BaseModule import BaseModule
 from src.engine.Trainer import Trainer
-
-
-class DummyDataset(data.Dataset):
-    def __init__(self, size=16, image_shape=(1, 32, 32)):
-        self.size = size
-        self.image_shape = image_shape
-
-    def __len__(self):
-        return self.size
-
-    def __getitem__(self, idx):
-        x = torch.randn(self.image_shape)
-        y = torch.rand(self.image_shape).round()
-        return x, y
-
-
-class DummyModel(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.net = nn.Sequential(nn.Conv2d(1, 4, 3, padding=1), nn.ReLU(), nn.Conv2d(4, 1, 1))
-
-    def forward(self, x):
-        return self.net(x)
+from src.engine.Tester import Tester
+from src.data.BinarySegmentationDataset import BinarySegmentationDataset
+from src.losses.ComboLoss import ComboLoss
 
 
 @pytest.fixture
-def binary_dataset_path(tmp_path):
-    images_dir = tmp_path / "images"
-    masks_dir = tmp_path / "masks"
-    images_dir.mkdir()
-    masks_dir.mkdir()
-    for i in range(1, 4):
-        img = np.random.randint(0, 256, (64, 64, 3), dtype=np.uint8)
-        cv2.imwrite(str(images_dir / f"img_{i}.png"), cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
-        mask = np.random.choice([0, 255], (64, 64), p=[0.7, 0.3]).astype(np.uint8)
-        cv2.imwrite(str(masks_dir / f"mask_{i}.png"), mask)
-    return tmp_path
-
-
-@pytest.fixture
-def mismatched_binary_path(tmp_path):
-    images_dir = tmp_path / "images"
-    masks_dir = tmp_path / "masks"
-    images_dir.mkdir()
-    masks_dir.mkdir()
-    img = np.zeros((64, 64, 3), dtype=np.uint8)
-    mask = np.zeros((64, 64), dtype=np.uint8)
-    cv2.imwrite(str(images_dir / "img1.png"), img)
-    cv2.imwrite(str(images_dir / "img2.png"), img)
-    cv2.imwrite(str(masks_dir / "mask1.png"), mask)
-    return tmp_path
-
-
-@pytest.fixture
-def missing_mask_path(tmp_path):
-    images_dir = tmp_path / "images"
-    masks_dir = tmp_path / "masks"
-    images_dir.mkdir()
-    masks_dir.mkdir()
-    img = np.zeros((64, 64, 3), dtype=np.uint8)
-    cv2.imwrite(str(images_dir / "img1.png"), img)
-    cv2.imwrite(str(images_dir / "img2.png"), img)
-    mask = np.zeros((64, 64), dtype=np.uint8)
-    cv2.imwrite(str(masks_dir / "mask1.png"), mask)
-    with open(str(masks_dir / "mask2.png"), "w") as f:
-        f.write("not an image")
-    return tmp_path
-
-
-@pytest.fixture
-def missing_image_path(tmp_path):
-    images_dir = tmp_path / "images"
-    masks_dir = tmp_path / "masks"
-    images_dir.mkdir()
-    masks_dir.mkdir()
-    img = np.zeros((64, 64, 3), dtype=np.uint8)
-    cv2.imwrite(str(images_dir / "img1.png"), img)
-    with open(str(images_dir / "img2.png"), "w") as f:
-        f.write("not an image")
-    mask = np.zeros((64, 64), dtype=np.uint8)
-    cv2.imwrite(str(masks_dir / "mask1.png"), mask)
-    cv2.imwrite(str(masks_dir / "mask2.png"), mask)
-    return tmp_path
-
-
-@pytest.fixture
-def empty_binary_path(tmp_path):
-    images_dir = tmp_path / "images"
-    masks_dir = tmp_path / "masks"
-    images_dir.mkdir()
-    masks_dir.mkdir()
-    return tmp_path
-
-
-@pytest.fixture
-def binary_dataset(binary_dataset_path):
-    return BinarySegmentationDataset(binary_dataset_path)
-
-
-@pytest.fixture
-def binary_dataset_with_compose(binary_dataset_path):
-    transforms = A.Compose(
-        [
-            A.RandomRotate90(),
-            A.HorizontalFlip(),
-            A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-            A.ToTensorV2(),
-        ]
-    )
-    return BinarySegmentationDataset(binary_dataset_path, transforms=transforms)
-
-
-@pytest.fixture
-def binary_dataset_with_dict(binary_dataset_path):
-    transforms = {
-        "geometric": A.Compose([A.RandomRotate90(), A.HorizontalFlip()]),
-        "photometric": A.RandomBrightnessContrast(),
-        "final": A.Compose(
-            [
-                A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-                A.ToTensorV2(),
-            ]
-        ),
-    }
-    return BinarySegmentationDataset(binary_dataset_path, transforms=transforms)
-
-
-@pytest.fixture
-def binary_dataset_dict_no_final(binary_dataset_path):
-    transforms = {
-        "geometric": A.Compose([A.RandomRotate90()]),
-        "photometric": A.RandomBrightnessContrast(),
-    }
-    return BinarySegmentationDataset(binary_dataset_path, transforms=transforms)
-
-
-class MockPaths:
-    def __init__(self, base):
-        self.base = base
-        self.RAW_DATA = base / "raw"
-        self.PROCESSED_DATA = base / "processed"
-        self.SAVED_CHECKPOINTS = base / "checkpoints"
-        self.DUTS_TR_IMAGES = self.RAW_DATA / "DUTS-TR" / "images"
-        self.DUTS_TR_MASKS = self.RAW_DATA / "DUTS-TR" / "masks"
-        self.DUTS_TE_IMAGES = self.RAW_DATA / "DUTS-TE" / "images"
-        self.DUTS_TE_MASKS = self.RAW_DATA / "DUTS-TE" / "masks"
-        self.TRAIN_IMAGES = self.PROCESSED_DATA / "train" / "images"
-        self.TRAIN_MASKS = self.PROCESSED_DATA / "train" / "masks"
-        self.VAL_IMAGES = self.PROCESSED_DATA / "val" / "images"
-        self.VAL_MASKS = self.PROCESSED_DATA / "val" / "masks"
-        self.TEST_IMAGES = self.PROCESSED_DATA / "test" / "images"
-        self.TEST_MASKS = self.PROCESSED_DATA / "test" / "masks"
-        self.CONFIG = base / "config.yaml"
-        self.TRAIN = self.PROCESSED_DATA / "train"
-        self.VAL = self.PROCESSED_DATA / "val"
-        self.TEST = self.PROCESSED_DATA / "test"
-
-
-@pytest.fixture
-def mock_paths(tmp_path):
-    return MockPaths(tmp_path)
-
-
-@pytest.fixture
-def sample_files(mock_paths):
-    for dir_path in [
-        mock_paths.DUTS_TR_IMAGES,
-        mock_paths.DUTS_TR_MASKS,
-        mock_paths.DUTS_TE_IMAGES,
-        mock_paths.DUTS_TE_MASKS,
-    ]:
-        dir_path.mkdir(parents=True, exist_ok=True)
-
-    for i in range(10):
-        (mock_paths.DUTS_TR_IMAGES / f"img{i}.jpg").touch()
-        (mock_paths.DUTS_TR_MASKS / f"img{i}.png").touch()
-
-    for i in range(5):
-        (mock_paths.DUTS_TE_IMAGES / f"test{i}.jpg").touch()
-        (mock_paths.DUTS_TE_MASKS / f"test{i}.png").touch()
-
-    config_content = {"dataset": {"splits": {"ratios": {"val": 0.2}, "seed": 42}}}
-    with open(mock_paths.CONFIG, "w") as f:
-        yaml.dump(config_content, f)
-
-    return mock_paths
-
-
-@pytest.fixture
-def mock_logger():
-    logger = MagicMock()
-    return logger
-
-
-@pytest.fixture
-def config() -> Dict:
-    return {"model": {"model_name": "dummy_model"}, "learning": {"threshold": 0.5}}
-
-
-@pytest.fixture
-def full_config(tmp_path, mock_paths):
-    config = {
-        "model": {
-            "model_name": "test_model",
-            "class": "src.models.SomeModel",
-            "params": {"in_channels": 3, "out_channels": 1, "features": [64, 128, 256]},
-        },
-        "learning": {
-            "accumulation_steps": 1,
-            "use_cuda": False,
-            "optimizer": {
-                "class": "torch.optim.Adam",
-                "params": {"lr": "0.001", "weight_decay": "0.0001"},
-            },
-            "scheduler": {
-                "class": "torch.optim.lr_scheduler.StepLR",
-                "params": {"step_size": "30", "gamma": "0.1"},
-            },
-            "loss": {
-                "class": "torch.nn.BCEWithLogitsLoss",
-                "params": {"reduction": "mean"},
-            },
-            "epochs": 10,
-            "save_criterion": "val/loss",
-            "mode": "min",
-            "early_stopping_patience": 5,
-            "log_interval": 1,
-            "threshold": 0.5,
-        },
-        "dataset": {"batch_sizes": {"train": 8, "val": 8, "test": 8}},
-        "dataloader": {
-            "batch_sizes": {"train": 8, "val": 8, "test": 8},
-            "seed": 42,
-            "num_workers": 0,
-            "pin_memory": False,
-            "persistent_workers": False,
-            "prefetch_factor": 2,
-        },
-        "logs": {
-            "types": {
-                "train": {"name": "train_logger"},
-                "errors": {"name": "errors_logger"},
-                "evaluate": {"name": "evaluate_logger"},
-            }
-        },
-        "evaluating": {
-            "metrics": [
-                {
-                    "name": "accuracy",
-                    "class": "torchmetrics.classification.BinaryAccuracy",
-                    "params": {"threshold": "0.5"},
-                },
-                {
-                    "name": "iou",
-                    "class": "torchmetrics.classification.BinaryJaccardIndex",
-                    "params": {"threshold": "0.5"},
-                },
-            ]
-        },
-    }
-    with open(mock_paths.CONFIG, "w") as f:
-        import yaml
-
-        yaml.dump(config, f)
+def dummy_config():
+    config_path = Path(__file__).parent / "dummy_config.yaml"
+    with open(config_path, 'r') as f:
+        config = yaml.safe_load(f)
     return config
 
 
 @pytest.fixture
-def device():
-    return torch.device("cpu")
+def sample_data_dir(tmp_path):
+    data_dir = tmp_path / "dataset"
+    data_dir.mkdir()
+    img = np.random.randint(0, 255, (64, 64, 3), dtype=np.uint8)
+    mask = np.zeros((64, 64), dtype=np.uint8)
+    mask[20:40, 20:40] = 255
+
+    img_path = data_dir / "img.png"
+    mask_path = data_dir / "mask.png"
+    cv2.imwrite(str(img_path), img)
+    cv2.imwrite(str(mask_path), mask)
+    return data_dir, img_path, mask_path
 
 
 @pytest.fixture
-def model():
-    return DummyModel()
+def dummy_manifest(sample_data_dir):
+    data_dir, img_path, mask_path = sample_data_dir
+    manifest = [
+        {
+            "image": str(img_path),
+            "mask": str(mask_path),
+            "resolution": [64, 64],  # height, width
+            "source": "Dataset1"
+        },
+        {
+            "image": str(img_path),
+            "mask": str(mask_path),
+            "resolution": [64, 64],  # height, width
+            "source": "Dataset2"
+        },
+        {
+            "image": str(img_path),
+            "mask": str(mask_path),
+            "resolution": [64, 64],  # height, width
+            "source": "Dataset3"
+        }
+    ]
+    return manifest
 
 
 @pytest.fixture
-def loss():
+def dummy_batch():
+    img1 = torch.rand(3, 64, 64, dtype=torch.float32)
+    mask1 = torch.zeros(1, 64, 64, dtype=torch.float32)
+    mask1[20:40, 20:40] = 1.0
+
+    img2 = torch.rand(3, 32, 32, dtype=torch.float32)
+    mask2 = torch.zeros(1, 32, 32, dtype=torch.float32)
+    mask2[20:40, 20:40] = 1.0
+
+    return [(img1, mask1), (img2, mask2)]
+
+
+def batch_generator(length: int, type: str = "tuple", item: int = 2):
+    images = []
+    masks = []
+    valids = []
+    for _ in range(length):
+        img = torch.rand(3, 64, 64, dtype=torch.float32)
+        images.append(img)
+
+        mask = torch.zeros(1, 64, 64, dtype=torch.float32)
+        mask[20:40, 20:40] = 1.0
+        masks.append(mask)
+
+        valid_mask = torch.zeros(1, 64, 64, dtype=torch.float32)
+        valid_mask[:, :32, :] = 1.0
+        valids.append(valid_mask)
+
+    images = torch.stack(images, dim=0)
+    masks = torch.stack(masks, dim=0)
+    valids = torch.stack(valids, dim=0)
+
+    if type == "tuple":
+        if item <= 1:
+            return (images,)
+        if item == 2:
+            return (images, masks)
+        if item >= 3:
+            return (images, masks, valid_mask)
+    if type == "list":
+        if item <= 1:
+            return [images,]
+        if item == 2:
+            return [images, masks]
+        if item >= 3:
+            return [images, masks, valid_mask]
+    if type == "dict":
+        if item <= 1:
+            return {"image": images}
+        if item == 2:
+            return {"image": images, "mask": masks}
+        if item >= 3:
+            return {"image": images, "mask": masks, "valid_mask": valid_mask}
+
+
+@pytest.fixture
+def dummy_basic_transforms():
+    return A.Compose([
+        A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ToTensorV2()
+    ])
+
+
+@pytest.fixture
+def dummy_dict_transforms():
+    transforms = {
+        "geometric": A.Compose([
+            A.HorizontalFlip(p=0.5),
+            A.VerticalFlip(p=0.1)
+        ], additional_targets={"mask": "image"}),
+        "photometric": A.Compose([
+            A.RandomBrightnessContrast(brightness_limit=0.25, contrast_limit=0.25, p=0.5),
+            A.HueSaturationValue(hue_shift_limit=15, sat_shift_limit=25, val_shift_limit=15, p=0.5)
+        ]),
+        "final_image": A.Compose([
+            A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            ToTensorV2()
+        ]),
+        "final_mask": ToTensorV2()
+    }
+    return transforms
+
+
+@pytest.fixture
+def dummy_model():
+    return nn.Sequential(
+        nn.Conv2d(3, 1, kernel_size=3, padding=1),
+        nn.Sigmoid()
+    )
+
+
+@pytest.fixture
+def dummy_loss_function():
     return nn.BCEWithLogitsLoss()
 
 
 @pytest.fixture
-def metrics():
+def dummy_combo_loss_function():
+    fn1 = nn.BCEWithLogitsLoss()
+    fn2 = nn.MSELoss()
+    return ComboLoss(loss_functions=[fn1, fn2], weights=[0.3, 0.7])
+
+
+@pytest.fixture
+def dummy_optimizer(dummy_model):
+    return optim.Adam(params=dummy_model.parameters(), lr=1e-4)
+
+
+@pytest.fixture
+def dummy_scheduler(dummy_optimizer):
+    return optim.lr_scheduler.ReduceLROnPlateau(dummy_optimizer)
+
+
+@pytest.fixture
+def dummy_metrics():
     return {
-        "accuracy": torchmetrics.classification.BinaryAccuracy(),
-        "iou": torchmetrics.classification.BinaryJaccardIndex(),
+        "iou": torchmetrics.JaccardIndex(task="binary"),
+        "accuracy": torchmetrics.Accuracy(task="binary"),
     }
 
 
 @pytest.fixture
-def optimizer(model):
-    return optim.Adam(model.parameters(), lr=1e-3)
+def dummy_logger():
+    logger = logging.getLogger("test")
+    logger.setLevel(logging.DEBUG)
+    logger.propagate = True
+    logger.addHandler(logging.NullHandler())
+    return logger
 
 
 @pytest.fixture
-def scheduler(optimizer):
-    return optim.lr_scheduler.StepLR(optimizer, step_size=1)
+def dummy_base_module(
+    dummy_model,
+    dummy_config,
+    dummy_loss_function,
+    dummy_optimizer,
+    tmp_path,
+    dummy_metrics,
+    dummy_logger
+) -> BaseModule:
+    log_dir = tmp_path / "test_dir"
+    return BaseModule(
+        model=dummy_model,
+        config=dummy_config,
+        loss_function=dummy_loss_function,
+        optimizer=dummy_optimizer,
+        log_dir=log_dir,
+        metrics=dummy_metrics,
+        device="cpu",
+        logger=dummy_logger
+    )
 
 
 @pytest.fixture
-def dataset():
-    return DummyDataset()
-
-
-@pytest.fixture
-def train_loader(dataset):
-    return data.DataLoader(dataset, batch_size=4)
-
-
-@pytest.fixture
-def val_loader(dataset):
-    return data.DataLoader(dataset, batch_size=4)
-
-
-@pytest.fixture
-def test_loader(dataset):
-    return data.DataLoader(dataset, batch_size=4)
-
-
-@pytest.fixture
-def log_dir(tmp_path):
-    return tmp_path / "logs"
-
-
-@pytest.fixture
-def trainer(model, config, loss, optimizer, scheduler, metrics, log_dir, device):
+def dummy_trainer(
+    dummy_model,
+    dummy_config,
+    dummy_loss_function,
+    dummy_optimizer,
+    tmp_path,
+    dummy_metrics,
+    dummy_scheduler,
+    dummy_logger,
+) -> Trainer:
+    log_dir = tmp_path / "test_dir"
     return Trainer(
-        model=model,
-        config=config,
-        loss_function=loss,
-        optimizer=optimizer,
-        scheduler=scheduler,
-        metrics=metrics,
+        model=dummy_model,
+        config=dummy_config,
+        loss_function=dummy_loss_function,
+        optimizer=dummy_optimizer,
         log_dir=log_dir,
-        device=device,
+        metrics=dummy_metrics,
+        scheduler=dummy_scheduler,
+        device="cpu",
+        logger=dummy_logger
     )
 
 
 @pytest.fixture
-def tester(model, config, loss, metrics, log_dir, device):
+def dummy_tester(
+    dummy_model,
+    dummy_config,
+    dummy_loss_function,
+    tmp_path,
+    dummy_metrics,
+    dummy_logger
+) -> Tester:
+    log_dir = tmp_path / "test_dir"
     return Tester(
-        model=model,
-        config=config,
-        loss_function=loss,
-        metrics=metrics,
+        model=dummy_model,
+        config=dummy_config,
+        loss_function=dummy_loss_function,
         log_dir=log_dir,
-        device=device,
+        metrics=dummy_metrics,
+        device="cpu",
+        logger=dummy_logger
     )
 
 
 @pytest.fixture
-def trained_checkpoint(tmp_path, trainer):
-    checkpoint_path = tmp_path / "fake_best.pt"
-    torch.save(
-        {
-            "epoch": 5,
-            "model_name": trainer.model_name,
-            "save_criterion": "val/loss",
-            "best_value": float("inf"),
-            "model_state_dict": trainer.model.state_dict(),
-            "optimizer_state_dict": trainer.optimizer.state_dict(),
-            "scheduler_state_dict": (trainer.scheduler.state_dict() if trainer.scheduler else None),
-            "metrics_history": trainer.metrics_history,
-            "config": trainer.config,
-        },
-        checkpoint_path,
-    )
-    return checkpoint_path
+def dummy_dataset(dummy_manifest):
+    return BinarySegmentationDataset(manifest=dummy_manifest)
 
 
 @pytest.fixture
-def mock_create_model(monkeypatch, model):
-    def mock(*args, **kwargs):
-        return model
-
-    monkeypatch.setattr("src.utils.factory.create_model", mock)
+def dummy_dataloader(dummy_dataset):
+    return data.DataLoader(dummy_dataset, batch_size=1)
 
 
 @pytest.fixture
-def mock_create_loss(monkeypatch, loss):
-    def mock(*args, **kwargs):
-        return loss
-
-    monkeypatch.setattr("src.utils.factory.create_loss", mock)
+def dummy_empty_dataset(dummy_manifest):
+    return data.TensorDataset(torch.empty(0, 3, 32, 32), torch.empty(0, 1, 32, 32))
 
 
 @pytest.fixture
-def mock_create_metrics(monkeypatch, metrics):
-    def mock(*args, **kwargs):
-        return metrics
-
-    monkeypatch.setattr("src.utils.factory.create_metrics", mock)
-
-
-@pytest.fixture
-def mock_create_optimizer(monkeypatch, optimizer):
-    def mock(*args, **kwargs):
-        return optimizer
-
-    monkeypatch.setattr("src.utils.factory.create_optimizer", mock)
-
-
-@pytest.fixture
-def mock_create_scheduler(monkeypatch, scheduler):
-    def mock(*args, **kwargs):
-        return scheduler
-
-    monkeypatch.setattr("src.utils.factory.create_scheduler", mock)
-
-
-@pytest.fixture
-def mock_paths_with_evaluate(tmp_path):
-    mock = MockPaths(tmp_path)
-    mock.SAVED_BEST_MODEL_TESTS = tmp_path / "evaluation_results"
-    return mock
+def dummy_empty_dataloader(dummy_empty_dataset):
+    return data.DataLoader(dummy_empty_dataset, batch_size=1)

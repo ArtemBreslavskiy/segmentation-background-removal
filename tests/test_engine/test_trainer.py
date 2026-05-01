@@ -4,285 +4,690 @@ import pytest
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torch.utils.data as data
+from torch.cuda.amp import GradScaler
+from typing import Callable
+from unittest.mock import Mock
 
 from src.engine.Trainer import Trainer
 from src.losses.ComboLoss import ComboLoss
 
 
 class TestTrainer:
-
-    @pytest.mark.parametrize("use_scheduler", [True, False])
-    def test_init(self, model, config, loss, optimizer, metrics, log_dir, device, use_scheduler):
-        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=1) if use_scheduler else None
-        trainer = Trainer(
-            model=model,
-            config=config,
-            loss_function=loss,
-            optimizer=optimizer,
-            metrics=metrics,
-            scheduler=scheduler,
-            log_dir=log_dir,
-            device=device,
-        )
-        assert trainer.scheduler == scheduler
-        assert isinstance(trainer.metrics_history, dict)
-
-    def test_train_epoch(self, trainer, train_loader):
-        result = trainer.train_epoch(train_loader)
-        assert "loss" in result
-        assert len(trainer.metrics_history["train"]["loss"]) > 0
-
-    def test_validate_epoch(self, trainer, val_loader):
-        result = trainer.validate_epoch(val_loader)
-        assert "loss" in result
-        assert len(trainer.metrics_history["val"]["loss"]) > 0
-
-    @pytest.mark.parametrize("mode", ["min", "max"])
-    def test_fit_runs(self, trainer, train_loader, val_loader, mode):
-        trainer.fit(train_loader, val_loader, epochs=2, mode=mode)
-
-    def test_fit_train_only(self, trainer, train_loader):
-        trainer.fit(train_loader, val_dataloader=None, epochs=1, save_criterion="train/loss")
-
-    def test_fit_invalid_mode(self, trainer, train_loader):
-        with pytest.raises(ValueError):
-            trainer.fit(train_loader, epochs=1, mode="wrong")
-
-    def test_fit_empty_train_loader(self, trainer):
-        with pytest.raises(ValueError):
-            trainer.fit([], epochs=1)
-
-    def test_fit_empty_val_loader(self, trainer, train_loader):
-        with pytest.raises(ValueError):
-            trainer.fit(train_loader, val_dataloader=[], epochs=1)
-
-    def test_fit_invalid_criterion(self, trainer, train_loader):
-        with pytest.raises(ValueError):
-            trainer.fit(train_loader, epochs=1, save_criterion="invalid")
-
-    def test_early_stopping(self, trainer, train_loader, val_loader):
-        trainer.fit(
-            train_loader,
-            val_loader,
-            epochs=5,
-            early_stopping_patience=1,
-        )
-
-    def test_scheduler_step(self, trainer, train_loader, val_loader):
-        trainer.scheduler = optim.lr_scheduler.StepLR(trainer.optimizer, step_size=1)
-        trainer.fit(train_loader, val_loader, epochs=2)
-
-    def test_reduce_on_plateau_scheduler(self, trainer, train_loader, val_loader):
-        trainer.scheduler = optim.lr_scheduler.ReduceLROnPlateau(trainer.optimizer)
-        trainer.fit(train_loader, val_loader, epochs=2)
-
-    def test_save_checkpoint(self, trainer, train_loader):
-        trainer.train_epoch(train_loader)
-        trainer.save_checkpoint(is_best=False)
-        files = list((trainer.log_dir / "checkpoints").glob("*.pt"))
-        assert len(files) > 0
-
-    def test_save_best_checkpoint(self, trainer, train_loader):
-        trainer.train_epoch(train_loader)
-        trainer.save_checkpoint(is_best=True)
-        best_file = trainer.log_dir / f"{trainer.model_name}_best.pt"
-        assert best_file.exists()
-
-    def test_load_checkpoint(self, trainer, train_loader):
-        trainer.train_epoch(train_loader)
-        trainer.save_checkpoint(is_best=True)
-        path = trainer.log_dir / f"{trainer.model_name}_best.pt"
-        trainer.load_checkpoint(path)
-
-    def test_load_checkpoint_without_optimizer(self, trainer, train_loader):
-        trainer.train_epoch(train_loader)
-        trainer.save_checkpoint(is_best=True)
-        path = trainer.log_dir / f"{trainer.model_name}_best.pt"
-        trainer.load_checkpoint(path, load_optimizer=False)
-
-    def test_load_checkpoint_without_scheduler(self, trainer, train_loader):
-        trainer.scheduler = optim.lr_scheduler.StepLR(trainer.optimizer, step_size=1)
-        trainer.train_epoch(train_loader)
-        trainer.save_checkpoint(is_best=True)
-        path = trainer.log_dir / f"{trainer.model_name}_best.pt"
-        trainer.load_checkpoint(path, load_scheduler=False)
-
-    def test_checkpoint_restores_state(self, trainer, train_loader):
-        trainer.train_epoch(train_loader)
-        trainer.save_checkpoint(is_best=True)
-        path = trainer.log_dir / f"{trainer.model_name}_best.pt"
-
-        before_epoch = trainer.current_epoch
-        trainer.current_epoch = 0
-        trainer.load_checkpoint(path)
-
-        assert trainer.current_epoch == before_epoch
-
-    def test_fit_saves_best(self, trainer, train_loader, val_loader):
-        trainer.fit(train_loader, val_loader, epochs=2)
-        best_file = trainer.log_dir / f"{trainer.model_name}_best.pt"
-        assert best_file.exists()
-
-    def test_log_interval_checkpoint(self, trainer, train_loader, val_loader):
-        trainer.fit(train_loader, val_loader, epochs=2, log_interval=1)
-        files = list(trainer.log_dir.rglob("*.pt"))
-        assert len(files) > 0
-
-    def test_load_trainer(self, trainer, train_loader, monkeypatch):
-        trainer.train_epoch(train_loader)
-        trainer.save_checkpoint(is_best=True)
-        path = trainer.log_dir / f"{trainer.model_name}_best.pt"
-
-        def fake_model(config):
-            return copy.deepcopy(trainer.model)
-
-        def fake_loss(config):
-            return nn.BCEWithLogitsLoss()
-
-        def fake_metrics(config):
-            return {}
-
-        def fake_optimizer(config, model):
-            return optim.SGD(model.parameters(), lr=0.1)
-
-        def fake_scheduler(config, optimizer):
-            return None
-
-        monkeypatch.setattr("src.utils.factory.create_model", fake_model)
-        monkeypatch.setattr("src.utils.factory.create_loss", fake_loss)
-        monkeypatch.setattr("src.utils.factory.create_metrics", fake_metrics)
-        monkeypatch.setattr("src.utils.factory.create_optimizer", fake_optimizer)
-        monkeypatch.setattr("src.utils.factory.create_scheduler", fake_scheduler)
-
-        loaded = Trainer.load_trainer(path, log_dir=trainer.log_dir, device=trainer.device)
-
-        assert isinstance(loaded, Trainer)
-        assert loaded.current_epoch == trainer.current_epoch
-        assert loaded.model_name == trainer.model_name
-
-    @pytest.mark.parametrize("criterion", ["train/loss", "val/loss"])
-    def test_fit_save_criterion(self, trainer, train_loader, val_loader, criterion):
-        if criterion.startswith("val"):
-            trainer.fit(train_loader, val_loader, epochs=2, save_criterion=criterion)
-        else:
-            trainer.fit(train_loader, epochs=2, save_criterion=criterion)
-
-    def test_metrics_history_updated(self, trainer, train_loader, val_loader):
-        trainer.fit(train_loader, val_loader, epochs=2)
-        assert len(trainer.metrics_history["train"]["loss"]) > 0
-        assert len(trainer.metrics_history["val"]["loss"]) > 0
-
-    @pytest.mark.parametrize("weights", [None, [0.5, 0.5], [2.0, 1.0]])
-    def test_combo_loss_in_training(self, model, config, optimizer, metrics, log_dir, device, train_loader, weights):
-        loss = ComboLoss([nn.BCEWithLogitsLoss(), nn.L1Loss()], weights=weights)
-        trainer = Trainer(
-            model=model,
-            config=config,
-            loss_function=loss,
-            optimizer=optimizer,
-            metrics=metrics,
-            log_dir=log_dir,
-            device=device,
-        )
-        result = trainer.train_epoch(train_loader)
-        assert "loss" in result
-        assert isinstance(result["loss"], float)
-
-    def test_combo_loss_components_logged(self, model, config, optimizer, metrics, log_dir, device, train_loader):
-        loss = ComboLoss([nn.BCEWithLogitsLoss(), nn.L1Loss()])
-        trainer = Trainer(
-            model=model,
-            config=config,
-            loss_function=loss,
-            optimizer=optimizer,
-            metrics=metrics,
-            log_dir=log_dir,
-            device=device,
-        )
-        trainer.train_epoch(train_loader)
-        history = trainer.metrics_history["train"]
-        assert "loss" in history
-
-    def test_combo_loss_forward_matches_manual(self):
-        logits = torch.randn(4, 1, 16, 16)
-        targets = torch.randn(4, 1, 16, 16)
-
-        l1 = nn.L1Loss()
-        l2 = nn.MSELoss()
-
-        combo = ComboLoss([l1, l2], weights=[1.0, 1.0])
-        value = combo(logits, targets)
-
-        expected = (l1(logits, targets) + l2(logits, targets)) / 2
-        assert torch.allclose(value, expected)
-
-    def test_combo_loss_components(self):
-        logits = torch.randn(2, 1, 8, 8)
-        targets = torch.randn(2, 1, 8, 8)
-
-        combo = ComboLoss([nn.L1Loss(), nn.MSELoss()])
-        total, components = combo.forward_with_components(logits, targets)
-
-        assert isinstance(components, dict)
-        assert len(components) == 2
-        assert isinstance(total, torch.Tensor)
-
-    @pytest.mark.parametrize("weights", [[1.0, 3.0], [0.2, 0.8]])
-    def test_combo_loss_weighting(self, weights):
-        logits = torch.randn(2, 1, 8, 8)
-        targets = torch.randn(2, 1, 8, 8)
-
-        l1 = nn.L1Loss()
-        l2 = nn.MSELoss()
-
-        combo = ComboLoss([l1, l2], weights=weights)
-        total, raw = combo.forward_with_components(logits, targets)
-
-        norm = [w / sum(weights) for w in weights]
-        expected = raw[combo.names[0]] * norm[0] + raw[combo.names[1]] * norm[1]
-
-        assert torch.allclose(total, expected)
-
-    def test_combo_loss_names_unique(self):
-        combo = ComboLoss([nn.L1Loss(), nn.L1Loss(), nn.L1Loss()])
-        assert len(set(combo.names)) == 3
-
-    def test_combo_loss_count(self):
-        combo = ComboLoss([nn.L1Loss(), nn.MSELoss()])
-        assert combo.count == 2
-
-    def test_combo_loss_invalid_empty(self):
-        with pytest.raises(ValueError):
-            ComboLoss([])
-
-    def test_combo_loss_invalid_weights(self):
-        with pytest.raises(ValueError):
-            ComboLoss([nn.L1Loss(), nn.MSELoss()], weights=[1.0])
-
-    def test_combo_loss_zero_weights(self):
-        with pytest.raises(ValueError):
-            ComboLoss([nn.L1Loss(), nn.MSELoss()], weights=[0.0, 0.0])
-
-    def test_combo_loss_with_fit(
+    def test_init(
         self,
-        model,
-        config,
-        optimizer,
-        metrics,
-        log_dir,
-        device,
-        train_loader,
-        val_loader,
+        dummy_model,
+        dummy_config,
+        dummy_loss_function,
+        dummy_optimizer,
+        tmp_path,
+        dummy_metrics,
+        dummy_scheduler,
+        dummy_logger
     ):
-        loss = ComboLoss([nn.BCEWithLogitsLoss(), nn.L1Loss()])
+        log_dir = tmp_path / "test_dir"
         trainer = Trainer(
-            model=model,
-            config=config,
-            loss_function=loss,
-            optimizer=optimizer,
-            metrics=metrics,
+            model=dummy_model,
+            config=dummy_config,
+            loss_function=dummy_loss_function,
+            optimizer=dummy_optimizer,
             log_dir=log_dir,
-            device=device,
+            metrics=dummy_metrics,
+            scheduler=dummy_scheduler,
+            device="cpu",
+            logger=dummy_logger,
+            model_name="test_model"
         )
-        trainer.fit(train_loader, val_loader, epochs=2)
-        assert len(trainer.metrics_history["train"]["loss"]) > 0
+
+        assert trainer.model == dummy_model
+        assert trainer.config == dummy_config
+        assert trainer.loss_function == dummy_loss_function
+        assert trainer.optimizer == dummy_optimizer
+        assert trainer.log_dir == log_dir
+        assert trainer.metrics == dummy_metrics
+        assert trainer.scheduler == dummy_scheduler
+        assert trainer.logger == dummy_logger
+        assert trainer.model_name == "test_model"
+
+        assert trainer.current_epoch == 0
+        assert trainer.has_components == False
+
+        assert isinstance(trainer.loss_function, Callable)
+        assert isinstance(trainer.scaler, GradScaler)
+
+        assert trainer.log_dir.exists()
+        assert trainer.log_dir.is_dir()
+        assert (trainer.log_dir / "checkpoints").exists()
+        assert (trainer.log_dir / "checkpoints").is_dir()
+
+    def test_init_without_optimizer(
+        self,
+        dummy_model,
+        dummy_config,
+        dummy_loss_function,
+        tmp_path,
+        dummy_metrics,
+        dummy_scheduler,
+        dummy_logger,
+        caplog
+    ):
+        log_dir = tmp_path / "test_dir"
+        with pytest.raises(ValueError, match="optimizer cannot be none"):
+            Trainer(
+                model=dummy_model,
+                config=dummy_config,
+                loss_function=dummy_loss_function,
+                optimizer=None,
+                log_dir=log_dir,
+                metrics=dummy_metrics,
+                scheduler=dummy_scheduler,
+                device="cpu",
+                logger=dummy_logger,
+                model_name="test_model"
+            )
+        assert any(
+            rec.levelname == "ERROR" and "optimizer cannot be none" in rec.message
+            for rec in caplog.records
+        )
+
+    @pytest.mark.parametrize("optimizer", [10, 0.5, "test"])
+    def test_init_with_unsupported_optimizer_type(
+        self,
+        dummy_model,
+        dummy_config,
+        dummy_loss_function,
+        tmp_path,
+        dummy_metrics,
+        dummy_scheduler,
+        dummy_logger,
+        optimizer,
+        caplog
+    ):
+        log_dir = tmp_path / "test_dir"
+        with pytest.raises(ValueError, match="Unsupported optimizer type"):
+            Trainer(
+                model=dummy_model,
+                config=dummy_config,
+                loss_function=dummy_loss_function,
+                optimizer=optimizer,
+                log_dir=log_dir,
+                metrics=dummy_metrics,
+                scheduler=dummy_scheduler,
+                device="cpu",
+                logger=dummy_logger,
+                model_name="test_model"
+            )
+        assert any(
+            rec.levelname == "ERROR" and "Unsupported optimizer type" in rec.message
+            for rec in caplog.records
+        )
+
+    @pytest.mark.parametrize("scheduler", [10, 0.5, "test"])
+    def test_init_with_unsupported_scheduler_type(
+        self,
+        dummy_model,
+        dummy_config,
+        dummy_loss_function,
+        dummy_optimizer,
+        tmp_path,
+        dummy_metrics,
+        dummy_scheduler,
+        dummy_logger,
+        scheduler,
+        caplog
+    ):
+        log_dir = tmp_path / "test_dir"
+        with pytest.raises(ValueError, match="Unsupported scheduler type"):
+            Trainer(
+                model=dummy_model,
+                config=dummy_config,
+                loss_function=dummy_loss_function,
+                optimizer=dummy_optimizer,
+                log_dir=log_dir,
+                metrics=dummy_metrics,
+                scheduler=scheduler,
+                device="cpu",
+                logger=dummy_logger,
+                model_name="test_model"
+            )
+        assert any(
+            rec.levelname == "ERROR" and "Unsupported scheduler type" in rec.message
+            for rec in caplog.records
+        )
+
+    def test_train_epoch(self, dummy_trainer, dummy_dataloader, caplog):
+        trainer = dummy_trainer
+        metrics = trainer.train_epoch(dummy_dataloader)
+        assert isinstance(metrics, dict)
+        assert "loss" in metrics
+        assert "iou" in metrics
+        assert "accuracy" in metrics
+        assert isinstance(metrics["loss"], float)
+        assert isinstance(metrics["iou"], float)
+        assert isinstance(metrics["accuracy"], float)
+
+        history = trainer.metrics_history["train"]
+        assert isinstance(history, dict)
+        assert "loss" in history
+        assert "iou" in history
+        assert "accuracy" in history
+        assert isinstance(history["loss"], list)
+        assert isinstance(history["loss"][0], float)
+        assert isinstance(history["iou"], list)
+        assert isinstance(history["iou"][0], float)
+        assert isinstance(history["accuracy"], list)
+        assert isinstance(history["accuracy"][0], float)
+
+        assert any(
+            rec.levelname == "INFO" and "epoch completed in" in rec.message
+            for rec in caplog.records
+        )
+        assert any(
+            rec.levelname == "INFO" and "completed: loss=" in rec.message
+            for rec in caplog.records
+        )
+
+    def test_train_epoch_with_combo_loss(
+        self,
+        dummy_dataloader,
+        dummy_model,
+        dummy_config,
+        dummy_combo_loss_function,
+        dummy_optimizer,
+        dummy_metrics,
+        tmp_path,
+        dummy_logger,
+        caplog
+    ):
+        log_dir = tmp_path / "test_dir"
+        trainer = Trainer(
+            model=dummy_model,
+            config=dummy_config,
+            loss_function=dummy_combo_loss_function,
+            optimizer=dummy_optimizer,
+            metrics=dummy_metrics,
+            log_dir=log_dir,
+            device="cpu",
+            logger=dummy_logger
+        )
+        metrics = trainer.train_epoch(dummy_dataloader)
+        assert isinstance(metrics, dict)
+        assert "loss" in metrics
+        assert "iou" in metrics
+        assert "accuracy" in metrics
+        assert "BCEWithLogitsLoss" in metrics
+        assert "MSELoss" in metrics
+        assert isinstance(metrics["loss"], float)
+        assert isinstance(metrics["iou"], float)
+        assert isinstance(metrics["accuracy"], float)
+        assert isinstance(metrics["BCEWithLogitsLoss"], float)
+        assert isinstance(metrics["MSELoss"], float)
+
+        history = trainer.metrics_history["train"]
+        assert isinstance(history, dict)
+        assert "loss" in history
+        assert "iou" in history
+        assert "accuracy" in history
+        assert "BCEWithLogitsLoss" in history
+        assert "MSELoss" in history
+        assert isinstance(history["loss"], list)
+        assert isinstance(history["loss"][0], float)
+        assert isinstance(history["iou"], list)
+        assert isinstance(history["iou"][0], float)
+        assert isinstance(history["accuracy"], list)
+        assert isinstance(history["accuracy"][0], float)
+        assert isinstance(history["BCEWithLogitsLoss"], list)
+        assert isinstance(history["BCEWithLogitsLoss"][0], float)
+        assert isinstance(history["MSELoss"], list)
+        assert isinstance(history["MSELoss"][0], float)
+
+    def test_train_epoch_without_dataloader(self, dummy_trainer, caplog):
+        with pytest.raises(ValueError, match="dataloader cannot be none"):
+            dummy_trainer.train_epoch(dataloader=None)
+        assert any(
+            rec.levelname == "ERROR" and "dataloader cannot be none" in rec.message
+            for rec in caplog.records
+        )
+
+    @pytest.mark.parametrize("dataloader", [10, 0.5, "test"])
+    def test_train_epoch_with_unsupported_dataloader_type(self, dummy_trainer, dataloader, caplog):
+        with pytest.raises(ValueError, match="Unsupported dataloader type"):
+            dummy_trainer.train_epoch(dataloader=dataloader)
+        assert any(
+            rec.levelname == "ERROR" and "Unsupported dataloader type" in rec.message
+            for rec in caplog.records
+        )
+
+    def test_train_epoch_with_empty_dataloader(self, dummy_trainer, dummy_empty_dataloader, caplog):
+        with pytest.raises(ValueError, match="dataloader cannot be empty"):
+            dummy_trainer.train_epoch(dataloader=dummy_empty_dataloader)
+        assert any(
+            rec.levelname == "ERROR" and "dataloader cannot be empty" in rec.message
+            for rec in caplog.records
+        )
+
+    def test_validate_epoch(self, dummy_trainer, dummy_dataloader, caplog):
+        trainer = dummy_trainer
+        metrics = trainer.validate_epoch(dummy_dataloader)
+        assert isinstance(metrics, dict)
+        assert "loss" in metrics
+        assert "iou" in metrics
+        assert "accuracy" in metrics
+        assert isinstance(metrics["loss"], float)
+        assert isinstance(metrics["iou"], float)
+        assert isinstance(metrics["accuracy"], float)
+
+        history = trainer.metrics_history["val"]
+        assert isinstance(history, dict)
+        assert "loss" in history
+        assert "iou" in history
+        assert "accuracy" in history
+        assert isinstance(history["loss"], list)
+        assert isinstance(history["loss"][0], float)
+        assert isinstance(history["iou"], list)
+        assert isinstance(history["iou"][0], float)
+        assert isinstance(history["accuracy"], list)
+        assert isinstance(history["accuracy"][0], float)
+
+        assert any(
+            rec.levelname == "INFO" and "epoch completed in" in rec.message
+            for rec in caplog.records
+        )
+        assert any(
+            rec.levelname == "INFO" and "completed: loss=" in rec.message
+            for rec in caplog.records
+        )
+
+    def test_validate_epoch_with_combo_loss(
+        self,
+        dummy_dataloader,
+        dummy_model,
+        dummy_config,
+        dummy_combo_loss_function,
+        dummy_optimizer,
+        dummy_metrics,
+        tmp_path,
+        dummy_logger,
+        caplog
+    ):
+        log_dir = tmp_path / "test_dir"
+        trainer = Trainer(
+            model=dummy_model,
+            config=dummy_config,
+            loss_function=dummy_combo_loss_function,
+            optimizer=dummy_optimizer,
+            metrics=dummy_metrics,
+            log_dir=log_dir,
+            device="cpu",
+            logger=dummy_logger
+        )
+        metrics = trainer.validate_epoch(dummy_dataloader)
+        assert isinstance(metrics, dict)
+        assert "loss" in metrics
+        assert "iou" in metrics
+        assert "accuracy" in metrics
+        assert "BCEWithLogitsLoss" in metrics
+        assert "MSELoss" in metrics
+        assert isinstance(metrics["loss"], float)
+        assert isinstance(metrics["iou"], float)
+        assert isinstance(metrics["accuracy"], float)
+        assert isinstance(metrics["BCEWithLogitsLoss"], float)
+        assert isinstance(metrics["MSELoss"], float)
+
+        history = trainer.metrics_history["val"]
+        assert isinstance(history, dict)
+        assert "loss" in history
+        assert "iou" in history
+        assert "accuracy" in history
+        assert "BCEWithLogitsLoss" in history
+        assert "MSELoss" in history
+        assert isinstance(history["loss"], list)
+        assert isinstance(history["loss"][0], float)
+        assert isinstance(history["iou"], list)
+        assert isinstance(history["iou"][0], float)
+        assert isinstance(history["accuracy"], list)
+        assert isinstance(history["accuracy"][0], float)
+        assert isinstance(history["BCEWithLogitsLoss"], list)
+        assert isinstance(history["BCEWithLogitsLoss"][0], float)
+        assert isinstance(history["MSELoss"], list)
+        assert isinstance(history["MSELoss"][0], float)
+
+    def test_validate_epoch_without_dataloader(self, dummy_trainer, caplog):
+        with pytest.raises(ValueError, match="dataloader cannot be none"):
+            dummy_trainer.validate_epoch(dataloader=None)
+        assert any(
+            rec.levelname == "ERROR" and "dataloader cannot be none" in rec.message
+            for rec in caplog.records
+        )
+
+    @pytest.mark.parametrize("dataloader", [10, 0.5, "test"])
+    def test_validate_epoch_with_unsupported_dataloader_type(self, dummy_trainer, dataloader, caplog):
+        with pytest.raises(ValueError, match="Unsupported dataloader type"):
+            dummy_trainer.validate_epoch(dataloader=dataloader)
+        assert any(
+            rec.levelname == "ERROR" and "Unsupported dataloader type" in rec.message
+            for rec in caplog.records
+        )
+
+    def test_validate_epoch_with_empty_dataloader(self, dummy_trainer, dummy_empty_dataloader, caplog):
+        with pytest.raises(ValueError, match="dataloader cannot be empty"):
+            dummy_trainer.validate_epoch(dataloader=dummy_empty_dataloader)
+        assert any(
+            rec.levelname == "ERROR" and "dataloader cannot be empty" in rec.message
+            for rec in caplog.records
+        )
+
+    def test_fit_without_val_dataloader_does_not_call_validate(self, dummy_trainer, dummy_dataloader, monkeypatch):
+        trainer = dummy_trainer
+        mock_validate = Mock()
+        monkeypatch.setattr(trainer, "train_epoch", lambda _: {"loss": 0.5, "iou": 0.8, "accuracy": 0.9})
+        monkeypatch.setattr(trainer, "validate_epoch", mock_validate)
+        monkeypatch.setattr(trainer, "save_checkpoint", Mock())
+
+        trainer.fit(train_dataloader=dummy_dataloader, epochs=10)
+        mock_validate.assert_not_called()
+
+    def test_fit_saves_best_model(self, dummy_trainer, dummy_dataloader, monkeypatch):
+        trainer = dummy_trainer
+        val_losses = [0.5, 0.4, 0.7, 0.3]
+        mock_validate = Mock(side_effect=lambda _: {"loss": val_losses.pop(0)})
+        save_mock = Mock()
+        monkeypatch.setattr(trainer, "train_epoch", lambda _: {"loss": 0.5})
+        monkeypatch.setattr(trainer, "validate_epoch", mock_validate)
+        monkeypatch.setattr(trainer, "save_checkpoint", save_mock)
+
+        trainer.fit(train_dataloader=dummy_dataloader, val_dataloader=dummy_dataloader, epochs=4, save_criterion="val/loss")
+        best_calls = [c for c in save_mock.call_args_list if c.kwargs.get("is_best") == True]
+        assert len(best_calls) == 3
+
+    def test_fit_early_stopping(self, dummy_trainer, dummy_dataloader, monkeypatch, caplog):
+        trainer = dummy_trainer
+        val_losses = [0.5, 0.6, 0.7, 0.8]
+        mock_validate = Mock(side_effect=lambda _: {"loss": val_losses.pop(0)})
+        monkeypatch.setattr(trainer, "train_epoch", lambda _: {"loss": 0.5})
+        monkeypatch.setattr(trainer, "validate_epoch", mock_validate)
+        monkeypatch.setattr(trainer, "save_checkpoint", Mock())
+
+        trainer.fit(
+            train_dataloader=dummy_dataloader,
+            val_dataloader=dummy_dataloader,
+            epochs=10,
+            mode="min",
+            early_stopping_patience=2
+        )
+        assert trainer.current_epoch == 3
+        assert any(
+            rec.levelname == "WARNING" and "Early stopping triggered after 2 epochs without improvement." in rec.message
+            for rec in caplog.records
+        )
+
+    def test_fit_scheduler_stap_called(self, dummy_trainer, dummy_dataloader, monkeypatch, caplog):
+        trainer = dummy_trainer
+        mock_scheduler = Mock()
+        trainer.scheduler = mock_scheduler
+        monkeypatch.setattr(trainer, "train_epoch", lambda _: {"loss": 0.5, "iou": 0.8, "accuracy": 0.9})
+        monkeypatch.setattr(trainer, "validate_epoch", {"loss": 0.4, "iou": 0.7, "accuracy": 0.8})
+        monkeypatch.setattr(trainer, "save_checkpoint", Mock())
+
+        trainer.fit(train_dataloader=dummy_dataloader, epochs=3)
+        assert mock_scheduler.step.call_count == 3
+        assert any(
+            rec.levelname == "DEBUG" and "Scheduler stepped (epoch-based). Current LR" in rec.message
+            for rec in caplog.records
+        )
+
+    @pytest.mark.parametrize("log_interval", [0, -2, -5])
+    def test_fit_with_invalid_log_interval(self, dummy_trainer, dummy_dataloader, log_interval, monkeypatch, caplog):
+        trainer = dummy_trainer
+        with pytest.raises(ValueError, match="log_interval cannot be less than 1"):
+            trainer.fit(
+                train_dataloader=dummy_dataloader,
+                log_interval=log_interval,
+                epochs=10
+            )
+        assert any(
+            rec.levelname == "ERROR" and "log_interval cannot be less than 1" in rec.message
+            for rec in caplog.records
+        )
+
+    def test_fit_no_epochs_left(self, dummy_trainer, dummy_dataloader, monkeypatch, caplog):
+        trainer = dummy_trainer
+        dummy_trainer.current_epoch = 10
+        with pytest.raises(ValueError, match="No epochs left to train"):
+            trainer.fit(train_dataloader=dummy_dataloader, epochs=10)
+        assert any(
+            rec.levelname == "ERROR" and "No epochs left to train" in rec.message
+            for rec in caplog.records
+        )
+
+    def test_fit_with_invalid_mode(self, dummy_trainer, dummy_dataloader, monkeypatch, caplog):
+        trainer = dummy_trainer
+        with pytest.raises(ValueError, match="Unknown mode"):
+            trainer.fit(train_dataloader=dummy_dataloader, epochs=10, mode="test")
+        assert any(
+            rec.levelname == "ERROR" and "Unknown mode" in rec.message
+            for rec in caplog.records
+        )
+
+    def test_fit_without_train_dataloader(self, dummy_trainer, monkeypatch, caplog):
+        trainer = dummy_trainer
+        with pytest.raises(ValueError, match="train_dataloader cannot be none"):
+            trainer.fit(train_dataloader=None, epochs=10)
+        assert any(
+            rec.levelname == "ERROR" and "train_dataloader cannot be none" in rec.message
+            for rec in caplog.records
+        )
+
+    def test_fit_with_empty_train_dataloader(self, dummy_trainer, dummy_empty_dataloader, monkeypatch, caplog):
+        trainer = dummy_trainer
+        with pytest.raises(ValueError, match="train_dataloader cannot be empty"):
+            trainer.fit(train_dataloader=dummy_empty_dataloader, epochs=10)
+        assert any(
+            rec.levelname == "ERROR" and "train_dataloader cannot be empty" in rec.message
+            for rec in caplog.records
+        )
+
+    @pytest.mark.parametrize("dataloader", [10, 0.5, "test"])
+    def test_fit_with_unsupported_train_dataloader_type(self, dummy_trainer, dataloader, monkeypatch, caplog):
+        trainer = dummy_trainer
+        with pytest.raises(ValueError, match="Unsupported train_dataloader type"):
+            trainer.fit(train_dataloader=dataloader, epochs=10)
+        assert any(
+            rec.levelname == "ERROR" and "Unsupported train_dataloader type" in rec.message
+            for rec in caplog.records
+        )
+
+    def test_fit_with_empty_val_dataloader(self, dummy_trainer, dummy_dataloader, dummy_empty_dataloader, monkeypatch, caplog):
+        trainer = dummy_trainer
+        with pytest.raises(ValueError, match="val_dataloader cannot be empty"):
+            trainer.fit(train_dataloader=dummy_dataloader, val_dataloader=dummy_empty_dataloader, epochs=10)
+        assert any(
+            rec.levelname == "ERROR" and "val_dataloader cannot be empty" in rec.message
+            for rec in caplog.records
+        )
+
+    @pytest.mark.parametrize("dataloader", [10, 0.5, "test"])
+    def test_fit_with_unsupported_val_dataloader_type(self, dummy_trainer, dummy_dataloader, dataloader, monkeypatch, caplog):
+        trainer = dummy_trainer
+        with pytest.raises(ValueError, match="Unsupported val_dataloader type"):
+            trainer.fit(train_dataloader=dummy_dataloader, val_dataloader=dataloader, epochs=10)
+        assert any(
+            rec.levelname == "ERROR" and "Unsupported val_dataloader type" in rec.message
+            for rec in caplog.records
+        )
+
+    def test_fit_with_without_val_dataloader_with_val_save_criteria(self, dummy_trainer, dummy_dataloader, monkeypatch, caplog):
+        trainer = dummy_trainer
+        with pytest.raises(ValueError, match="With save criterion val/loss, val_dataloader cannot be None"):
+            trainer.fit(
+                train_dataloader=dummy_dataloader,
+                val_dataloader=None,
+                epochs=10,
+                save_criterion="val/loss")
+        assert any(
+            rec.levelname == "ERROR" and "With save criterion val/loss, val_dataloader cannot be None" in rec.message
+            for rec in caplog.records
+        )
+
+    @pytest.mark.parametrize("save_criterion", ["test", "train/nonexistent", "val/nonexistent"])
+    def test_fit_with_invalid_save_criterion(self, dummy_trainer, dummy_dataloader, save_criterion, monkeypatch, caplog):
+        trainer = dummy_trainer
+        with pytest.raises(ValueError, match="save_criterion not found in metrics"):
+            trainer.fit(
+                train_dataloader=dummy_dataloader,
+                val_dataloader=dummy_dataloader,
+                epochs=10,
+                save_criterion=save_criterion)
+        assert any(
+            rec.levelname == "ERROR" and "save_criterion not found in metrics" in rec.message
+            for rec in caplog.records
+        )
+
+    def test_save_checkpoint(
+        self,
+        dummy_model,
+        dummy_config,
+        dummy_loss_function,
+        dummy_optimizer,
+        dummy_metrics,
+        tmp_path,
+        dummy_logger
+    ):
+        log_dir = tmp_path / "test_dir"
+        trainer = Trainer(
+            model=dummy_model,
+            config=dummy_config,
+            loss_function=dummy_loss_function,
+            optimizer=dummy_optimizer,
+            metrics=dummy_metrics,
+            log_dir=log_dir,
+            device="cpu",
+            logger=dummy_logger
+        )
+        trainer.current_epoch = 5
+        trainer.best_value = 0.5
+        trainer.save_criterion = "val/loss"
+        trainer.save_checkpoint(is_best=True)
+
+        best_path = tmp_path / "test_dir" / f"{trainer.model_name}_best.pt"
+        assert best_path.exists()
+        checkpoint = torch.load(best_path)
+        assert "model_state_dict" in checkpoint
+        assert "optimizer_state_dict" in checkpoint
+        assert "scheduler_state_dict" in checkpoint
+        assert "metrics_history" in checkpoint
+        assert "config" in checkpoint
+        assert checkpoint["epoch"] == 5
+        assert checkpoint["model_name"] == "TestModel"
+        assert checkpoint["save_criterion"] == "val/loss"
+        assert checkpoint["best_value"] == 0.5
+
+    def test_save_checkpoint_intermediate(self, dummy_trainer, tmp_path):
+        trainer = dummy_trainer
+        trainer.current_epoch = 2
+        trainer.save_checkpoint(is_best=False)
+        checkpoints_dir = tmp_path / "test_dir" / "checkpoints"
+        files = list(checkpoints_dir.glob(f"{trainer.model_name}_epoch_2_*.pt"))
+        assert len(files) == 1
+
+    def test_load_checkpoint(self, dummy_trainer, dummy_combo_loss_function, dummy_loss_function, tmp_path, caplog):
+        trainer = dummy_trainer
+        trainer.current_epoch = 10
+        trainer.best_value = 0.75
+        trainer.save_criterion = "val/iou"
+        trainer.metrics_history = {"train": {"loss": [0.1]}, "val": {"loss": [0.2]}}
+        trainer.save_checkpoint(is_best=True)
+
+        trainer.current_epoch = 5
+        trainer.best_value = 0.5
+        trainer.save_criterion = "train/loss"
+        trainer.metrics_history = {"train": {"loss": [0.9]}, "val": {"loss": [0.8]}}
+
+        best_path = tmp_path / "test_dir" / f"{trainer.model_name}_best.pt"
+        trainer.load_checkpoint(best_path, load_optimizer=True, load_scheduler=False)
+
+        assert trainer.current_epoch == 10
+        assert trainer.best_value == 0.75
+        assert trainer.save_criterion == "val/iou"
+        assert trainer.metrics_history == {"train": {"loss": [0.1]}, "val": {"loss": [0.2]}}
+        for p_loaded, p_orig in zip(trainer.model.parameters(), dummy_trainer.model.parameters()):
+            assert torch.equal(p_loaded, p_orig)
+
+        assert any(
+            rec.levelname == "INFO" and "Checkpoint loaded from" in rec.message
+            for rec in caplog.records
+        )
+
+    def test_load_checkpoint_with_another_config(self, dummy_trainer, tmp_path, caplog):
+        trainer = dummy_trainer
+        trainer.save_checkpoint(is_best=True)
+        trainer.config = {}
+        best_path = tmp_path / "test_dir" / f"{trainer.model_name}_best.pt"
+        trainer.load_checkpoint(best_path, load_optimizer=True, load_scheduler=False)
+
+        assert any(
+            rec.levelname == "INFO" and "Checkpoint loaded from" in rec.message
+            for rec in caplog.records
+        )
+        assert any(
+            rec.levelname == "WARNING" and "Configuration mismatch detected" in rec.message
+            for rec in caplog.records
+        )
+
+    def test_load_trainer(
+        self,
+        dummy_trainer,
+        dummy_logger,
+        dummy_loss_function,
+        dummy_metrics,
+        tmp_path,
+        caplog,
+        monkeypatch
+    ):
+        trainer = dummy_trainer
+        trainer.current_epoch = 10
+        trainer.best_value = 0.75
+        trainer.save_criterion = "val/iou"
+        trainer.metrics_history = {"train": {"loss": [0.1]}, "val": {"loss": [0.2]}}
+        trainer.save_checkpoint(is_best=True)
+
+        monkeypatch.setattr("src.utils.factories.model_factory.create_model",
+                            lambda cfg: trainer.model)
+        monkeypatch.setattr("src.utils.factories.loss_fn_factory.create_loss",
+                            lambda cfg: trainer.loss_function)
+        monkeypatch.setattr("src.utils.factories.metrics_factory.create_metrics",
+                            lambda cfg: trainer.metrics)
+        monkeypatch.setattr("src.utils.factories.optimizer_factory.create_optimizer",
+                            lambda cfg, model: trainer.optimizer)
+        monkeypatch.setattr("src.utils.factories.scheduler_factory.create_scheduler",
+                            lambda cfg, optimizer: trainer.scheduler)
+
+        trainer.current_epoch = 5
+        trainer.best_value = 0.5
+        trainer.save_criterion = "train/loss"
+        trainer.metrics_history = {"train": {"loss": [0.9]}, "val": {"loss": [0.8]}}
+
+        log_dir = tmp_path / "test_dir"
+        best_path = log_dir / f"{trainer.model_name}_best.pt"
+        trainer = Trainer.load_trainer(best_path, log_dir, logger=dummy_logger)
+
+        assert trainer.current_epoch == 10
+        assert trainer.best_value == 0.75
+        assert trainer.save_criterion == "val/iou"
+        assert trainer.metrics_history == {"train": {"loss": [0.1]}, "val": {"loss": [0.2]}}
+        assert trainer.loss_function == dummy_loss_function
+        assert trainer.metrics == dummy_metrics
+        for p_loaded, p_orig in zip(trainer.model.parameters(), dummy_trainer.model.parameters()):
+            assert torch.equal(p_loaded, p_orig)
+
+    @pytest.mark.parametrize("config", [None, {}])
+    def test_load_trainer_without_config_in_checkpoint(self, dummy_trainer, config, dummy_logger, tmp_path, caplog):
+        trainer = dummy_trainer
+        trainer.config = config
+        trainer.save_checkpoint(is_best=True)
+
+        log_dir = tmp_path / "test_dir"
+        best_path = log_dir / f"{trainer.model_name}_best.pt"
+
+        with pytest.raises(ValueError, match="Checkpoint does not contain config. Cannot restore components."):
+            Trainer.load_trainer(best_path, log_dir, logger=dummy_logger)

@@ -13,11 +13,11 @@ class MockLoss(nn.Module):
         self.value = value
 
     def forward(self, pred, target):
-        return torch.tensor(self.value, dtype=torch.float32)
+        return torch.tensor(self.value, requires_grad=True, dtype=torch.float32)
 
 
 class TestComboLoss:
-    def test_combo_loss_returns_float(self):
+    def test_returns_float(self):
         loss_function = ComboLoss([SoftDiceLoss(smooth=1.0), FocalLoss(alpha=0.75, gamma=2.0)], [0.7, 0.3])
 
         pred = torch.randn(2, 1, 64, 64)
@@ -29,7 +29,7 @@ class TestComboLoss:
         assert loss.dim() == 0
         assert loss.item() >= 0
 
-    def test_combo_loss_perfect_match(self):
+    def test_perfect_match(self):
         loss_function = ComboLoss([SoftDiceLoss(smooth=1.0), FocalLoss(alpha=0.75, gamma=2.0)], [0.7, 0.3])
 
         pred_ones = torch.ones(2, 1, 64, 64) * 100
@@ -44,7 +44,7 @@ class TestComboLoss:
         assert loss_one.item() == pytest.approx(0.0, abs=1e-3)
         assert loss_zero.item() == pytest.approx(0.0, abs=1e-3)
 
-    def test_combo_loss_perfect_mismatch(self):
+    def test_perfect_mismatch(self):
         loss_function = ComboLoss([SoftDiceLoss(smooth=1.0), FocalLoss(alpha=0.75, gamma=2.0)], [0.7, 0.3])
 
         pred_ones = torch.ones(2, 1, 64, 64) * 100
@@ -60,7 +60,7 @@ class TestComboLoss:
         assert loss_mismatch_1.item() > loss_smatch
         assert loss_mismatch_2.item() > loss_smatch
 
-    def test_combo_loss_gradients(self):
+    def test_gradients(self):
         loss_function = ComboLoss([SoftDiceLoss(smooth=1.0), FocalLoss(alpha=0.75, gamma=2.0)], [0.7, 0.3])
 
         pred = torch.randn(2, 1, 64, 64, requires_grad=True)
@@ -73,7 +73,7 @@ class TestComboLoss:
         assert not torch.all(pred.grad == 0)
         assert pred.grad.shape == pred.shape
 
-    def test_combo_loss_gradients_with_components(self):
+    def test_gradients_with_components(self):
         loss_function = ComboLoss([SoftDiceLoss(smooth=1.0), FocalLoss(alpha=0.75, gamma=2.0)], [0.7, 0.3])
 
         pred = torch.randn(2, 1, 64, 64, requires_grad=True)
@@ -90,7 +90,7 @@ class TestComboLoss:
             assert c.grad_fn is not None
 
     @pytest.mark.parametrize("batch_size", list(range(1, 33)))
-    def test_combo_loss_different_batch_sizes(self, batch_size):
+    def test_different_batch_sizes(self, batch_size):
         loss_function = ComboLoss([SoftDiceLoss(smooth=1.0), FocalLoss(alpha=0.75, gamma=2.0)], [0.7, 0.3])
 
         pred = torch.randn(batch_size, 1, 64, 64)
@@ -104,7 +104,7 @@ class TestComboLoss:
         "height, width",
         [(i, j) for i in range(32, 513, 32) for j in range(32, 513, 32)],
     )
-    def test_combo_loss_different_resolutions(self, height, width):
+    def test_different_resolutions(self, height, width):
         loss_function = ComboLoss([SoftDiceLoss(smooth=1.0), FocalLoss(alpha=0.75, gamma=2.0)], [0.7, 0.3])
 
         pred = torch.randn(2, 1, height, width)
@@ -116,7 +116,7 @@ class TestComboLoss:
         assert loss.item() >= 0
 
     @pytest.mark.parametrize("num_losses", list(range(1, 33)))
-    def test_combo_loss_different_number_of_losses(self, num_losses):
+    def test_different_number_of_losses(self, num_losses):
         losses = [MockLoss(0.5) for _ in range(num_losses)]
         combo_function = ComboLoss(losses)
 
@@ -129,7 +129,7 @@ class TestComboLoss:
         assert loss.item() >= 0
         assert combo_function.count == num_losses
 
-    def test_combo_loss_extreme_value(self):
+    def test_extreme_value(self):
         loss_function = ComboLoss([SoftDiceLoss(smooth=1.0), FocalLoss(alpha=0.75, gamma=2.0)], [0.7, 0.3])
 
         pred_big = torch.ones(2, 1, 64, 64) * 1e6
@@ -153,7 +153,7 @@ class TestComboLoss:
         assert loss_one_1.item() >= 0
         assert loss_one_2.item() >= 0
 
-    def test_combo_loss_monotonic(self):
+    def test_monotonic(self):
         loss_function = ComboLoss([SoftDiceLoss(smooth=1.0), FocalLoss(alpha=0.75, gamma=2.0)], [0.7, 0.3])
 
         preds = [torch.ones(2, 1, 64, 64) * v for v in range(-100, 101)]
@@ -163,7 +163,7 @@ class TestComboLoss:
         for i in range(1, len(losses)):
             assert losses[i] <= losses[i - 1] + 1e-5
 
-    def test_combo_loss_reproducibility(self):
+    def test_reproducibility(self):
         loss_function = ComboLoss([SoftDiceLoss(smooth=1.0), FocalLoss(alpha=0.75, gamma=2.0)], [0.7, 0.3])
 
         torch.manual_seed(42)
@@ -175,22 +175,22 @@ class TestComboLoss:
 
         assert loss1.item() == pytest.approx(loss2.item(), abs=1e-10)
 
-    def test_combo_loss_initialization_empty(self):
+    def test_initialization_empty(self):
         with pytest.raises(ValueError, match="loss_functions cannot be empty"):
             ComboLoss([])
 
-    def test_combo_loss_initialization_wrong_weights_length(self):
+    def test_initialization_wrong_weights_length(self):
         with pytest.raises(ValueError, match="Number of weights must match"):
             ComboLoss([SoftDiceLoss(smooth=1.0), FocalLoss(alpha=0.75, gamma=2.0)], [0.7])
 
-    def test_combo_loss_initialization_negative_weights_sum(self):
+    def test_initialization_negative_weights_sum(self):
         with pytest.raises(ValueError, match="Sum of weights must be positive"):
             ComboLoss(
                 [SoftDiceLoss(smooth=1.0), FocalLoss(alpha=0.75, gamma=2.0)],
                 [-0.7, 0.3],
             )
 
-    def test_combo_loss_initialization_without_weights(self):
+    def test_initialization_without_weights(self):
         loss_function = ComboLoss(
             [SoftDiceLoss(smooth=1.0), FocalLoss(alpha=0.75, gamma=2.0)],
         )
@@ -199,7 +199,7 @@ class TestComboLoss:
         assert loss_function.weights[0] == pytest.approx(0.5, abs=1e-5)
         assert loss_function.weights[1] == pytest.approx(0.5, abs=1e-5)
 
-    def test_combo_loss_weights_normalization(self):
+    def test_weights_normalization(self):
         weights = [1.0, 2.0, 3.0]
         expected_weights = [1.0 / 6.0, 2.0 / 6.0, 3.0 / 6.0]
 
@@ -215,7 +215,7 @@ class TestComboLoss:
         for actual, expected in zip(loss_function.weights, expected_weights):
             assert actual == pytest.approx(expected, abs=1e-5)
 
-    def test_combo_loss_calculation(self):
+    def test_calculation(self):
         loss_function = ComboLoss([MockLoss(0.5), MockLoss(0.3), MockLoss(0.2)], [1.0, 2.0, 3.0])
 
         pred = torch.randn(2, 1, 64, 64)
@@ -226,7 +226,7 @@ class TestComboLoss:
 
         assert loss.item() == pytest.approx(expected_loss, abs=1e-5)
 
-    def test_combo_loss_forward_with_components(self):
+    def test_forward_with_components(self):
         soft_dice_loss_function = SoftDiceLoss(smooth=1.0)
         focal_loss_function = FocalLoss(alpha=0.75, gamma=2.0)
         loss_functions = [soft_dice_loss_function, focal_loss_function]
@@ -262,7 +262,7 @@ class TestComboLoss:
         weighted = soft_dice_loss * combo_function.weights[0] + focal_loss * combo_function.weights[1]
         assert total_loss == pytest.approx(weighted, abs=1e-5)
 
-    def test_combo_loss_get_raw_losses(self):
+    def test_get_raw_losses(self):
         soft_dice_loss_function = SoftDiceLoss(smooth=1.0)
         focal_loss_function = FocalLoss(alpha=0.75, gamma=2.0)
         loss_functions = [soft_dice_loss_function, focal_loss_function]
@@ -290,7 +290,7 @@ class TestComboLoss:
         assert raw_losses["SoftDiceLoss"].item() >= 0
         assert raw_losses["FocalLoss"].item() >= 0
 
-    def test_combo_loss_names_property(self):
+    def test_names_property(self):
         loss_functions = [
             SoftDiceLoss(smooth=1.0),
             FocalLoss(alpha=0.75, gamma=2.0),
@@ -301,7 +301,7 @@ class TestComboLoss:
         assert len(combo_function.names) == len(loss_functions)
         assert combo_function.names == ["SoftDiceLoss", "FocalLoss", "SoftDiceLoss_1"]
 
-    def test_combo_loss_get_weights_property(self):
+    def test_get_weights_property(self):
         loss_functions = [
             SoftDiceLoss(smooth=1.0),
             FocalLoss(alpha=0.75, gamma=2.0),
@@ -314,7 +314,7 @@ class TestComboLoss:
         for actual, expected in zip(combo_function.weights, weights):
             assert actual == pytest.approx(expected, abs=1e-5)
 
-    def test_combo_loss_count_property(self):
+    def test_count_property(self):
         loss_functions = [
             SoftDiceLoss(smooth=1.0),
             FocalLoss(alpha=0.75, gamma=2.0),

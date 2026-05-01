@@ -14,8 +14,8 @@ class MaskedPixelwiseSoftDiceLoss(nn.Module):
         targets_flat = targets.view(B, -1)
         if valid_mask is not None:
             valid_flat = valid_mask.view(B, -1)
-            probs = probs_flat * valid_flat
-            targets = targets_flat * valid_flat
+            probs_flat = probs_flat * valid_flat
+            targets_flat = targets_flat * valid_flat
             pixels_per_image = valid_flat.sum(1)
             total_pixels = pixels_per_image.sum()
         else:
@@ -23,8 +23,8 @@ class MaskedPixelwiseSoftDiceLoss(nn.Module):
             pixels_per_image = torch.full((B,), num_pixels_per_image, device=logits.device)
             total_pixels = B * num_pixels_per_image
 
-        intersection = (probs * targets).sum(dim=1)
-        cardinality = probs.sum(dim=1) + targets.sum(dim=1)
+        intersection = (probs_flat * targets_flat).sum(dim=1)
+        cardinality = probs_flat.sum(dim=1) + targets_flat.sum(dim=1)
 
         dice_score = (2.0 * intersection + self.smooth) / (cardinality + self.smooth)
         dice_loss_per_image = 1.0 - dice_score

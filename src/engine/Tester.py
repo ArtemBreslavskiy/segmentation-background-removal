@@ -34,17 +34,34 @@ class Tester(BaseModule):
             logger=logger,
         )
 
-    def evaluate(self, dataloader: data.DataLoader, metrics: Dict[str, torchmetrics.Metric]) -> Dict[str, float]:
+    def evaluate(
+        self,
+        dataloader: data.DataLoader,
+        metrics: Optional[Dict[str, torchmetrics.Metric]] = None
+    ) -> Dict[str, float]:
 
-        if len(dataloader) == 0:
-            error_msg = "Test dataloader is empty"
+        if dataloader is None:
+            error_msg = "dataloader cannot be none"
             self.logger.exception(error_msg)
             raise ValueError(error_msg)
+        if not isinstance(dataloader, data.DataLoader):
+            error_msg = "Unsupported dataloader type"
+            self.logger.exception(error_msg)
+            raise ValueError(error_msg)
+        if len(dataloader) == 0:
+            error_msg = "dataloader cannot be empty"
+            self.logger.exception(error_msg)
+            raise ValueError(error_msg)
+
+        if metrics is None:
+            metrics = self.metrics
+        else:
+            metrics = self._validate_metrics(metrics)
+            metrics = {k: v.to(self.device) for k, v in metrics.items()}
 
         self.logger.info(f"Starting evaluation on {len(dataloader)} batches")
         self.logger.debug(f"Using metrics: {list(metrics.keys())}")
 
-        metrics = {k: v.to(self.device) for k, v in metrics.items()}
         metrics_values = self.run_epoch(dataloader, "test", metrics)
 
         self.logger.info("Evaluation completed")
@@ -70,7 +87,7 @@ class Tester(BaseModule):
         checkpoint = torch.load(path, map_location=device, weights_only=False)
 
         config = checkpoint["config"]
-        if config is None:
+        if config is None or len(config) == 0:
             raise ValueError("Checkpoint does not contain config. Cannot restore components.")
 
         from src.utils.factories.loss_fn_factory import create_loss

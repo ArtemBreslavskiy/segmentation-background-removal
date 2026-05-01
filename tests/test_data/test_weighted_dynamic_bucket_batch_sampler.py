@@ -1,9 +1,5 @@
 import pytest
-import torch
 import numpy as np
-import cv2
-import json
-from pathlib import Path
 
 from src.data.WeightedDynamicBucketBatchSampler import WeightedDynamicBucketBatchSampler
 

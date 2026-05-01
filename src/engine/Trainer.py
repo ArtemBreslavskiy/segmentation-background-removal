@@ -8,7 +8,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.utils.data as data
 import torchmetrics
-from torch.optim.lr_scheduler import _LRScheduler
+from torch.optim.lr_scheduler import LRScheduler
 
 from src.engine.BaseModule import BaseModule
 from src.losses.ComboLoss import ComboLoss
@@ -20,10 +20,10 @@ class Trainer(BaseModule):
         model: nn.Module,
         config: Dict,
         loss_function: Union[nn.Module, Callable],
-        optimizer: Optional[optim.Optimizer] = None,
+        optimizer: optim.Optimizer,
         log_dir: Optional[Union[str, Path]] = None,
         metrics: Optional[Dict[str, torchmetrics.Metric]] = None,
-        scheduler: Optional[_LRScheduler] = None,
+        scheduler: Optional[LRScheduler] = None,
         device: Optional[Union[torch.device, str]] = None,
         model_name: Optional[str] = None,
         logger: Optional[logging.Logger] = None,
@@ -39,7 +39,20 @@ class Trainer(BaseModule):
             model_name=model_name,
             logger=logger,
         )
-        self.current_epoch = 0
+        if optimizer is None:
+            error_msg = "optimizer cannot be none"
+            self.logger.exception(error_msg)
+            raise ValueError(error_msg)
+        if not isinstance(optimizer, optim.Optimizer):
+            error_msg = "Unsupported optimizer type"
+            self.logger.exception(error_msg)
+            raise ValueError(error_msg)
+
+        if scheduler is not None and not isinstance(scheduler, LRScheduler):
+            error_msg = "Unsupported scheduler type"
+            self.logger.exception(error_msg)
+            raise ValueError(error_msg)
+
         self.save_criterion = None
         self.best_value = None
         self.scheduler = scheduler
@@ -65,24 +78,17 @@ class Trainer(BaseModule):
         train_dataloader: data.DataLoader,
         val_dataloader: Optional[data.DataLoader] = None,
         epochs: int = 10,
-        save_criterion: str = "val/loss",
+        save_criterion: str = "train/loss",
         mode: str = "min",
         early_stopping_patience: Optional[int] = None,
         log_interval: int = 1,
     ):
         remaining_epochs = epochs - self.current_epoch
         if remaining_epochs < 1:
-            raise ValueError(
+            error_msg = (
                 f"No epochs left to train: total_epochs={epochs + self.current_epoch}, "
                 f"current_epoch={self.current_epoch}"
             )
-        if len(train_dataloader) == 0:
-            error_msg = "Train dataloader is empty"
-            self.logger.exception(error_msg)
-            raise ValueError(error_msg)
-
-        if val_dataloader and len(val_dataloader) == 0:
-            error_msg = "Val dataloader is empty"
             self.logger.exception(error_msg)
             raise ValueError(error_msg)
 
@@ -91,11 +97,37 @@ class Trainer(BaseModule):
             self.logger.exception(error_msg)
             raise ValueError(error_msg)
 
-        patience_counter = 0
-        self.save_criterion = save_criterion.lower()
+        if log_interval != -1 and log_interval < 1:
+            error_msg = "log_interval cannot be less than 1"
+            self.logger.exception(error_msg)
+            raise ValueError(error_msg)
 
+        if train_dataloader is None:
+            error_msg = "train_dataloader cannot be none"
+            self.logger.exception(error_msg)
+            raise ValueError(error_msg)
+        if not isinstance(train_dataloader, data.DataLoader):
+            error_msg = "Unsupported train_dataloader type"
+            self.logger.exception(error_msg)
+            raise ValueError(error_msg)
+        if len(train_dataloader) == 0:
+            error_msg = "train_dataloader cannot be empty"
+            self.logger.exception(error_msg)
+            raise ValueError(error_msg)
+
+        if val_dataloader is not None:
+            if not isinstance(val_dataloader, data.DataLoader):
+                error_msg = "Unsupported val_dataloader type"
+                self.logger.exception(error_msg)
+                raise ValueError(error_msg)
+            if len(val_dataloader) == 0:
+                error_msg = "val_dataloader cannot be empty"
+                self.logger.exception(error_msg)
+                raise ValueError(error_msg)
+
+        self.save_criterion = save_criterion.lower()
         if self.save_criterion.startswith("val/") and val_dataloader is None:
-            error_msg = f"With save criterion {self.save_criterion}, " f"val_dataloader cannot be None"
+            error_msg = f"With save criterion {self.save_criterion}, val_dataloader cannot be None"
             self.logger.exception(error_msg)
             raise ValueError(error_msg)
 
@@ -111,6 +143,7 @@ class Trainer(BaseModule):
             def is_better(current, best):
                 return current > best
 
+        patience_counter = 0
         for _ in range(remaining_epochs):
             self.current_epoch += 1
             train_metrics = self.train_epoch(train_dataloader)
@@ -165,7 +198,7 @@ class Trainer(BaseModule):
 
             if early_stopping_patience and patience_counter >= early_stopping_patience:
                 self.logger.warning(
-                    "Early stopping triggered after %d epochs without improvement. " "Best %s: %.4f",
+                    "Early stopping triggered after %d epochs without improvement. Best %s: %.4f",
                     early_stopping_patience,
                     self.save_criterion,
                     self.best_value,
@@ -180,7 +213,7 @@ class Trainer(BaseModule):
                 current_lr = self.optimizer.param_groups[0]["lr"]
                 self.logger.debug(f"Scheduler stepped (epoch-based). Current LR: {current_lr:.2e}")
 
-            if self.current_epoch % log_interval == 0:
+            if self.current_epoch % log_interval == 0 and log_interval != -1:
                 self.logger.info("Checkpoint saved for epoch %d (intermediate).", self.current_epoch)
                 self.save_checkpoint(is_best=False)
 
@@ -202,7 +235,6 @@ class Trainer(BaseModule):
             "scheduler_state_dict": (self.scheduler.state_dict() if self.scheduler else None),
             "metrics_history": self.metrics_history,
             "config": self.config,
-            "logger": self.logger,
         }
         torch.save(checkpoint, filename)
         self.logger.debug("Checkpoint saved to %s", filename)
@@ -212,6 +244,7 @@ class Trainer(BaseModule):
         path: Union[str, Path],
         load_optimizer: bool = True,
         load_scheduler: bool = True,
+        logger: Optional[logging.Logger] = None,
     ):
         checkpoint = torch.load(path, map_location=self.device, weights_only=False)
         self.logger.info(
@@ -239,7 +272,7 @@ class Trainer(BaseModule):
         self.save_criterion = checkpoint["save_criterion"]
         self.best_value = checkpoint["best_value"]
         self.metrics_history = checkpoint["metrics_history"]
-        self.logger = checkpoint["logger"]
+        self.logger = logger if logger is not None else logging.getLogger(__name__)
 
         if load_optimizer:
             self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
@@ -252,11 +285,12 @@ class Trainer(BaseModule):
         path: Union[str, Path],
         log_dir: Optional[Union[str, Path]] = None,
         device: Optional[Union[torch.device, str]] = None,
+        logger: Optional[logging.Logger] = None,
     ):
         checkpoint = torch.load(path, map_location=device, weights_only=False)
 
         config = checkpoint["config"]
-        if config is None:
+        if config is None or len(config) == 0:
             raise ValueError("Checkpoint does not contain config. Cannot restore components.")
 
         from src.utils.factories.loss_fn_factory import create_loss
@@ -281,6 +315,7 @@ class Trainer(BaseModule):
             scheduler=scheduler,
             device=device,
             model_name=checkpoint["model_name"],
+            logger=logger
         )
         trainer.model.load_state_dict(checkpoint["model_state_dict"])
         trainer.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
@@ -290,6 +325,8 @@ class Trainer(BaseModule):
         trainer.metrics = {name: metric.to(trainer.device) for name, metric in trainer.metrics.items()}
         trainer.metrics_history = checkpoint["metrics_history"]
         trainer.current_epoch = checkpoint["epoch"]
+        trainer.best_value = checkpoint["best_value"]
+        trainer.save_criterion = checkpoint["save_criterion"]
         trainer.has_components = isinstance(trainer.loss_function, ComboLoss)
 
         return trainer

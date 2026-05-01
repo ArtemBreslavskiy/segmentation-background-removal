@@ -35,7 +35,7 @@ class BinarySegmentationDataset(data.Dataset):
         self.max_area = max_area
         self.resize_mode = resize_mode
         if self.max_area > 0:
-            self.areas = [item.get("area", 0) for item in manifest]
+            self.areas = [item.get("resolution", [0, 0])[0] * item.get("resolution", [0, 0])[1] for item in manifest]
         self.length = len(self.images)
 
     def __getitem__(self, idx):

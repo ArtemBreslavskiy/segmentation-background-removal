@@ -5,7 +5,7 @@ from src.losses.SoftDiceLoss import SoftDiceLoss
 
 
 class TestSoftDiceLoss:
-    def test_soft_dice_loss_returns_float(self):
+    def test_loss_returns_float(self):
         loss_function = SoftDiceLoss(smooth=1.0)
 
         pred = torch.randn(2, 1, 64, 64)
@@ -17,7 +17,7 @@ class TestSoftDiceLoss:
         assert loss.dim() == 0
         assert loss.item() >= 0
 
-    def test_soft_dice_loss_perfect_match(self):
+    def test_loss_perfect_match(self):
         loss_function = SoftDiceLoss(smooth=1.0)
 
         pred_ones = torch.ones(2, 1, 64, 64) * 100
@@ -32,7 +32,7 @@ class TestSoftDiceLoss:
         assert loss_one.item() == pytest.approx(0.0, abs=1e-3)
         assert loss_zero.item() == pytest.approx(0.0, abs=1e-3)
 
-    def test_soft_dice_loss_perfect_mismatch(self):
+    def test_loss_perfect_mismatch(self):
         loss_function = SoftDiceLoss(smooth=1.0)
 
         pred_ones = torch.ones(2, 1, 64, 64) * 100
@@ -47,7 +47,7 @@ class TestSoftDiceLoss:
         assert loss_mismatch_1.item() == pytest.approx(1.0, abs=1e-3)
         assert loss_mismatch_2.item() == pytest.approx(1.0, abs=1e-3)
 
-    def test_soft_dice_loss_gradients(self):
+    def test_loss_gradients(self):
         loss_function = SoftDiceLoss(smooth=1.0)
 
         pred = torch.randn(2, 1, 64, 64, requires_grad=True)
@@ -61,7 +61,7 @@ class TestSoftDiceLoss:
         assert pred.grad.shape == pred.shape
 
     @pytest.mark.parametrize("batch_size", list(range(1, 33)))
-    def test_soft_dice_loss_different_batch_sizes(self, batch_size):
+    def test_loss_different_batch_sizes(self, batch_size):
         loss_function = SoftDiceLoss(smooth=1.0)
 
         pred = torch.randn(batch_size, 1, 64, 64)
@@ -75,7 +75,7 @@ class TestSoftDiceLoss:
         "height, width",
         [(i, j) for i in range(32, 513, 32) for j in range(32, 513, 32)],
     )
-    def test_soft_dice_loss_different_resolutions(self, height, width):
+    def test_loss_different_resolutions(self, height, width):
         loss_function = SoftDiceLoss(smooth=1.0)
 
         pred = torch.randn(2, 1, height, width)
@@ -86,8 +86,8 @@ class TestSoftDiceLoss:
         assert loss.dim() == 0
         assert 0 <= loss.item() <= 1
 
-    @pytest.mark.parametrize("smooth", list(range(1, 101)))
-    def test_soft_dice_loss_different_smooth(self, smooth):
+    @pytest.mark.parametrize("smooth", list(range(0, 101)))
+    def test_loss_different_smooth(self, smooth):
         loss_function = SoftDiceLoss(smooth=smooth)
 
         pred_ones = torch.ones(2, 1, 64, 64) * 100
@@ -100,7 +100,7 @@ class TestSoftDiceLoss:
         assert loss_zero.item() < 0.1
         assert loss_ones.item() > 0.9
 
-    def test_soft_dice_loss_extreme_value(self):
+    def test_loss_extreme_value(self):
         loss_function = SoftDiceLoss(smooth=1e-6)
 
         pred_big = torch.ones(2, 1, 64, 64) * 1e6
@@ -124,7 +124,7 @@ class TestSoftDiceLoss:
         assert 0 <= loss_one_1.item() <= 1
         assert 0 <= loss_one_2.item() <= 1
 
-    def test_soft_dice_loss_monotonic(self):
+    def test_loss_monotonic(self):
         loss_function = SoftDiceLoss(smooth=1.0)
 
         preds = [torch.ones(2, 1, 64, 64) * v for v in range(-100, 101)]
@@ -134,7 +134,7 @@ class TestSoftDiceLoss:
         for i in range(1, len(losses)):
             assert losses[i] <= losses[i - 1] + 1e-5
 
-    def test_soft_dice_loss_reproducibility(self):
+    def test_loss_reproducibility(self):
         loss_function = SoftDiceLoss(smooth=1.0)
 
         torch.manual_seed(42)

@@ -30,6 +30,33 @@ class BaseModule(ABC):
         logger: Optional[logging.Logger] = None,
     ):
         self.logger = logger if logger is not None else logging.getLogger(__name__)
+        if model is None:
+            error_msg = "model cannot be none"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+        if not isinstance(model, nn.Module):
+            error_msg = "Unsupported model type"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        if loss_function is None:
+            error_msg = "loss_function cannot be none"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+        if not isinstance(loss_function, (nn.Module, Callable)):
+            error_msg = "Unsupported loss_function type"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        if config is None:
+            error_msg = "config cannot be none"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+        if not isinstance(config, Dict):
+            error_msg = "Unsupported config type"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+
         self.optimizer = optimizer
         self.loss_function = loss_function
         self.device = self._device_validate(device)
@@ -55,38 +82,97 @@ class BaseModule(ABC):
 
     def _device_validate(self, device: Union[torch.device, str, None]):
         if device is None:
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        elif isinstance(device, str):
+        if isinstance(device, str):
             try:
                 device = torch.device(device)
             except Exception as ex:
                 error_msg = f"Invalid device parameter value: {device}. {ex}"
-                self.logger.exception(error_msg)
+                self.logger.error(error_msg)
                 raise ValueError(error_msg)
 
-        if device.type == "cuda" and not torch.cuda.is_available():
-            error_msg = "GPU is not available"
-            self.logger.exception(error_msg)
+        if isinstance(device, torch.device):
+            if device.type == "cuda" and not torch.cuda.is_available():
+                error_msg = "GPU is not available"
+                self.logger.error(error_msg)
+                raise ValueError(error_msg)
+            return device
+
+        error_msg = f"Invalid device parameter value: {device}."
+        self.logger.error(error_msg)
+        raise ValueError(error_msg)
+
+    def _validate_predictions(self, predictions):
+        if predictions is None:
+            error_msg = "predictions cannot be none"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+        elif not isinstance(predictions, torch.Tensor):
+            error_msg = "Unsupported predictions format"
+            self.logger.error(error_msg)
             raise ValueError(error_msg)
 
-        return device
+    def _validate_targets(self, targets):
+        if targets is None:
+            error_msg = "targets cannot be none"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+        elif not isinstance(targets, torch.Tensor):
+            error_msg = "Unsupported targets format"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
 
-    def _ensure_log_dir(self, log_dir):
-        log_dir = Path(log_dir) if log_dir else Path.cwd() / "logs"
+    def _validate_metrics(self, metrics) -> Dict[str, torchmetrics.Metric]:
+        if metrics is None or metrics == {}:
+            error_msg = "metrics cannot be none or empty"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+        if isinstance(metrics, torchmetrics.Metric):
+            return {type(metrics).__name__: metrics}
+        if isinstance(metrics, dict):
+            return metrics
+        error_msg = "Unsupported metrics format"
+        self.logger.error(error_msg)
+        raise ValueError(error_msg)
+
+    def _ensure_log_dir(self, log_dir: Union[str, Path]):
+        if not isinstance(log_dir, (str, Path)) and log_dir is not None:
+            error_msg = f"unsupported path format"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        if log_dir is None:
+            log_dir = Path.cwd() / "logs"
+            self.logger.warning(f"Entered log_dir is empty. Auto log_dir: {log_dir}")
+        else:
+            log_dir = Path(log_dir)
+
         log_dir.mkdir(parents=True, exist_ok=True)
-
         checkpoints_dir = log_dir / "checkpoints"
         checkpoints_dir.mkdir(parents=True, exist_ok=True)
 
         return log_dir
 
-    def _move_batch_to_device(self, batch):
-        if isinstance(batch, (Tuple, List)):
-            return [b.to(self.device) for b in batch]
-        if isinstance(batch, Dict):
-            return {key: value.to(self.device) for key, value in batch.items()}
-        return batch.to(self.device)
+    def _move_batch_to_device(self, batch: Union[Tuple, List, Dict]):
+        if batch is None:
+            error_msg = "Batch cannot be none"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+        if isinstance(batch, (Tuple, List, Dict)):
+            if len(batch) == 0:
+                error_msg = "Batch cannot be empty"
+                self.logger.error(error_msg)
+                raise ValueError(error_msg)
+            if isinstance(batch, (Tuple, List)):
+                return [b.to(self.device) for b in batch]
+            if isinstance(batch, Dict):
+                return {key: value.to(self.device) for key, value in batch.items()}
+        if isinstance(batch, torch.Tensor):
+            return batch.to(self.device)
+        error_msg = f"Error transferring a batch of an unsupported format ({type(batch)})"
+        self.logger.error(error_msg)
+        raise ValueError(error_msg)
 
     def _unpack_batch(self, batch: Union[Tuple, List, Dict]):
         if isinstance(batch, (Tuple, List)):
@@ -96,47 +182,46 @@ class BaseModule(ABC):
                 return batch[0], batch[1], batch[2]
             else:
                 error_msg = f"Batch must contain at least 2 elements, got {len(batch)}"
-                self.logger.exception(error_msg)
+                self.logger.error(error_msg)
                 raise ValueError(error_msg)
 
         elif isinstance(batch, Dict):
-            if "image" in batch and "mask" in batch:
+            if "image" in batch and "mask" in batch and "valid_mask" in batch:
+                return batch["image"], batch["mask"], batch["valid_mask"]
+            elif "image" in batch and "mask" in batch:
                 return batch["image"], batch["mask"]
             else:
-                error_msg = f"Dictionary must contain keys 'image' and 'mask', " f"got {batch.keys()}"
-                self.logger.exception(error_msg)
+                error_msg = f"Dictionary must contain keys 'image' and 'mask', got {batch.keys()}"
+                self.logger.error(error_msg)
                 raise ValueError(error_msg)
 
         elif torch.is_tensor(batch):
             error_msg = "Batch must contain both images and masks"
-            self.logger.exception(error_msg)
+            self.logger.error(error_msg)
             raise ValueError(error_msg)
 
         else:
             error_msg = f"Unsupported batch type: {type(batch)}"
-            self.logger.exception(error_msg)
+            self.logger.error(error_msg)
             raise TypeError(error_msg)
 
     @torch.no_grad()
     def _update_metrics(
         self,
-        predictions,
-        targets,
+        predictions: torch.Tensor,
+        targets: torch.Tensor,
         metrics: Dict[str, torchmetrics.Metric],
         threshold: Optional[float] = None,
     ):
-        if predictions is None:
-            error_msg = "Predictions can't be none"
-            self.logger.exception(error_msg)
-            raise ValueError(error_msg)
+        self._validate_predictions(predictions)
+        self._validate_targets(targets)
+        metrics = self._validate_metrics(metrics)
 
-        if targets is None:
-            error_msg = "Targets can't be none"
-            self.logger.exception(error_msg)
-            raise ValueError(error_msg)
-
-        if threshold is None:
-            threshold = self.config["learning"]["threshold"]
+        if not isinstance(threshold, float):
+            try:
+                threshold = float(threshold)
+            except:
+                threshold = self.config["learning"]["threshold"]
 
         probs = torch.sigmoid(predictions)
         preds = (probs > threshold).long()
@@ -144,13 +229,18 @@ class BaseModule(ABC):
             metric.update(preds, targets.long())
 
     def _reset_metrics(self, metrics: Dict[str, torchmetrics.Metric]):
+        metrics = self._validate_metrics(metrics)
         for metric in metrics.values():
             metric.reset()
 
     def _compute_metrics(self, metrics: Dict[str, torchmetrics.Metric]):
+        metrics = self._validate_metrics(metrics)
         return {name: metric.compute().item() for name, metric in metrics.items()}
 
     def _compute_loss(self, predictions, targets, return_components=False):
+        self._validate_predictions(predictions)
+        self._validate_targets(targets)
+
         if hasattr(self.loss_function, "forward_with_components") and return_components:
             total_loss, components = self.loss_function.forward_with_components(predictions, targets)
             return total_loss, components
@@ -166,29 +256,40 @@ class BaseModule(ABC):
         mode: str,
         metrics: Optional[Dict[str, torchmetrics.Metric]] = None,
     ) -> Dict[str, float]:
+        mode = mode.lower()
+        correct_modes = ["train", "val", "test"]
+        if mode not in correct_modes:
+            error_msg = f"Unknown mode: {mode}. Available mods: {correct_modes}"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
 
-        if mode == "train" and self.optimizer is None:
-            raise RuntimeError("Optimizer required for training mode")
+        if dataloader is None:
+            error_msg = "dataloader cannot be none"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+        if not isinstance(dataloader, data.DataLoader):
+            error_msg = "Unsupported dataloader type"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+        if len(dataloader) == 0:
+            error_msg = "dataloader cannot be empty"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        if mode == "train":
+            if self.optimizer is None:
+                error_msg = "Optimizer required for training mode"
+                self.logger.error(error_msg)
+                raise RuntimeError(error_msg)
+            if not isinstance(self.optimizer, optim.Optimizer):
+                error_msg = "Unsupported optimizer type"
+                self.logger.error(error_msg)
+                raise RuntimeError(error_msg)
 
         if self.device.type == "cuda" and torch.cuda.is_available():
             torch.cuda.reset_peak_memory_stats()
             memory_before = torch.cuda.memory_allocated() / 1024**2
             self.logger.debug(f"Memory before {mode}: {memory_before:.1f}MB")
-
-        mode = mode.lower()
-        correct_modes = ["train", "val", "test"]
-
-        if mode not in correct_modes:
-            error_msg = f"Unknown mode: {mode}. Available mods: {correct_modes}"
-            self.logger.exception(error_msg)
-            raise ValueError(error_msg)
-
-        current_metrics = self.metrics if metrics is None or mode in ["train", "val"] else metrics
-
-        if dataloader is None:
-            error_msg = "dataloader cannot be None"
-            self.logger.exception(error_msg)
-            raise ValueError(error_msg)
 
         if mode == "train":
             train = True
@@ -202,16 +303,13 @@ class BaseModule(ABC):
         start_time = time.time()
         total_loss = 0.0
         num_batches = 0
+        current_metrics = self.metrics if metrics is None or mode in ["train", "val"] \
+            else self._validate_metrics(metrics)
         self._reset_metrics(current_metrics)
 
-        use_pixels_accumulation = self.config["learning"].get("samples_per_step", 0) > 0
         pixels_per_step = self.config["learning"].get("pixels_per_step", 0)
         accumulation_steps = self.config["learning"].get("accumulation_steps", 1)
-        if use_pixels_accumulation and pixels_per_step <= 0:
-            raise ValueError("pixels_per_step must be > 0 when enabled")
-        if use_pixels_accumulation:
-            accumulation_steps = 1
-
+        use_pixels_accumulation = pixels_per_step > 0
         if pixels_per_step:
             accumulated_pixels = 0
 
@@ -228,7 +326,12 @@ class BaseModule(ABC):
             for batch in pbar:
                 try:
                     batch = self._move_batch_to_device(batch)
-                    x, y, valid_mask = self._unpack_batch(batch)
+                    if len(batch) == 3:
+                        x, y, valid_mask = self._unpack_batch(batch)
+                        valid_mask = None
+                    else:
+                        x, y = self._unpack_batch(batch)
+                        valid_mask = None
                     if valid_mask is not None:
                         num_pixels = valid_mask.sum().item()
                     else:
@@ -274,7 +377,7 @@ class BaseModule(ABC):
                         }
                     )
                 except Exception as ex:
-                    self.logger.exception(f"Error in {mode} batch {num_batches}: {ex}")
+                    self.logger.error(f"Error in {mode} batch {num_batches}: {ex}")
                     if mode == "train":
                         self.logger.warning(f"Skipping train batch {num_batches}")
                         torch.cuda.empty_cache()
@@ -296,11 +399,6 @@ class BaseModule(ABC):
                 self.scaler.step(self.optimizer)
                 self.scaler.update()
                 self.optimizer.zero_grad()
-
-        if num_batches == 0:
-            error_msg = "dataloader cannot be empty"
-            self.logger.exception(error_msg)
-            raise ValueError(error_msg)
 
         if self.device.type == "cuda" and torch.cuda.is_available():
             memory_after = torch.cuda.memory_allocated() / 1024**2

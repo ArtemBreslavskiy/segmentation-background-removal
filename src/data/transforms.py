@@ -1,7 +1,7 @@
 from typing import Dict, Union
 
 import albumentations as A
-import albumentations.pytorch as AP
+from albumentations.pytorch import ToTensorV2
 import cv2
 
 
@@ -46,11 +46,11 @@ def get_train_transforms() -> Dict[str, Union[A.Compose, A.BasicTransform]]:
     final_image = A.Compose(
         [
             A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-            AP.ToTensorV2(),
+            ToTensorV2,
         ]
     )
 
-    final_mask = AP.ToTensorV2()
+    final_mask = ToTensorV2
 
     return {
         "geometric": geometric,
@@ -64,11 +64,11 @@ def get_val_test_transforms() -> Dict[str, Union[A.Compose, A.BasicTransform]]:
     final_image = A.Compose(
         [
             A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-            AP.ToTensorV2(),
+            ToTensorV2,
         ]
     )
 
-    final_mask = AP.ToTensorV2()
+    final_mask = ToTensorV2
 
     return {
         "geometric": None,
