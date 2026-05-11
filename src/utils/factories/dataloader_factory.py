@@ -1,23 +1,17 @@
-import json
 import random
-from pathlib import Path
-from typing import Callable, Dict, List, Optional, Union
+from typing import Callable, Dict, Optional
 
 import numpy as np
 import torch
 import torch.utils.data as data
 
-from ProjectPaths import ProjectPaths
+from src.data.BinarySegmentationDataset import BinarySegmentationDataset
 from src.utils.factories.batch_sampler_factory import create_batch_sampler
-from src.utils.factories.dataset_factory import (
-    create_test_dataset,
-    create_train_dataset,
-    create_val_dataset,
-)
 from src.utils.weighted_dynamic_bucket_batch_sampler_utils import (
     get_area_and_aspect_ratio,
     get_sample_weight,
 )
+from src.utils.factories.factory_utils import convert_value
 
 
 def seed_worker(worker_id):
@@ -29,37 +23,28 @@ def seed_worker(worker_id):
 def create_dataloader(
     config: Dict,
     mode: str,
-    json_path: Optional[Union[ProjectPaths, str, Path]] = None,
-    manifest: Optional[List[Dict]] = None,
+    dataset: data.Dataset,
     batch_sampler: Optional[data.BatchSampler] = None,
     collate_fn: Optional[Callable] = None,
-    resize_mode: str = "resize",
 ) -> data.DataLoader:
     mode = mode.lower()
     correct_modes = ["train", "test", "val"]
     if mode not in correct_modes:
         raise ValueError(f"Unknown mode: {mode}. Available mods: {correct_modes}")
 
-    if isinstance(json_path, ProjectPaths):
-        if mode == "train":
-            json_path = json_path.TRAIN
-        elif mode == "test":
-            json_path = json_path.TEST
-        elif mode == "val":
-            json_path = json_path.VAL
+    if dataset is None:
+        raise ValueError("dataset cannot be none")
+    if not isinstance(dataset, data.Dataset):
+        raise ValueError("Unsupported dataset format")
+    if len(dataset) < 1:
+        raise ValueError("dataset cannot be empty")
 
-    if not manifest:
-        if json_path:
-            with open(json_path, "r", encoding="utf-8") as f:
-                manifest = json.load(f)
-        else:
-            raise ValueError("Either json_path or manifest must be provided")
-
-    dataset = None
-    dataloader_config = config["dataloader"]
+    dataloader_config = convert_value(config["dataloader"])
     batch_size = dataloader_config["batch_sizes"][mode]
     num_workers = dataloader_config.get("num_workers", 0)
     shuffle = dataloader_config["shuffle"][mode]
+    generator = torch.Generator()
+    generator.manual_seed(dataloader_config["seed"])
 
     if batch_sampler is not None:
         if batch_size is not None or shuffle is not None:
@@ -68,16 +53,6 @@ def create_dataloader(
         raise ValueError("batch_size must be set in config when batch_sampler is not used.")
     elif shuffle is None:
         raise ValueError("shuffle must be set in config when batch_sampler is not used.")
-
-    if mode == "train":
-        dataset = create_train_dataset(config, manifest=manifest, resize_mode=resize_mode)
-    elif mode == "val":
-        dataset = create_val_dataset(config, manifest=manifest, resize_mode=resize_mode)
-    elif mode == "test":
-        dataset = create_test_dataset(config, manifest=manifest, resize_mode=resize_mode)
-
-    generator = torch.Generator()
-    generator.manual_seed(config["dataloader"]["seed"])
 
     loaded_kwargs = {}
     if batch_size is not None:
@@ -105,74 +80,62 @@ def create_dataloader(
 
 def create_train_dataloader(
     config: Dict,
-    json_path: Optional[Union[ProjectPaths, str, Path]] = None,
-    manifest: Optional[List[Dict]] = None,
+    dataset: data.Dataset,
     batch_sampler: Optional[data.BatchSampler] = None,
     collate_fn: Optional[Callable] = None,
-    resize_mode: str = "resize",
 ) -> data.DataLoader:
     return create_dataloader(
         config=config,
-        json_path=json_path,
-        manifest=manifest,
+        dataset=dataset,
         mode="train",
         batch_sampler=batch_sampler,
         collate_fn=collate_fn,
-        resize_mode=resize_mode,
     )
 
 
 def create_test_dataloader(
     config: Dict,
-    json_path: Optional[Union[ProjectPaths, str, Path]] = None,
-    manifest: Optional[List[Dict]] = None,
+    dataset: data.Dataset,
     batch_sampler: Optional[data.BatchSampler] = None,
     collate_fn: Optional[Callable] = None,
-    resize_mode: str = "resize",
 ) -> data.DataLoader:
     return create_dataloader(
         config=config,
-        json_path=json_path,
-        manifest=manifest,
+        dataset=dataset,
         mode="test",
         batch_sampler=batch_sampler,
         collate_fn=collate_fn,
-        resize_mode=resize_mode,
     )
 
 
 def create_val_dataloader(
     config: Dict,
-    json_path: Optional[Union[ProjectPaths, str, Path]] = None,
-    manifest: Optional[List[Dict]] = None,
+    dataset: data.Dataset,
     batch_sampler: Optional[data.BatchSampler] = None,
     collate_fn: Optional[Callable] = None,
-    resize_mode: str = "resize",
 ) -> data.DataLoader:
     return create_dataloader(
         config=config,
-        json_path=json_path,
-        manifest=manifest,
+        dataset=dataset,
         mode="val",
         batch_sampler=batch_sampler,
         collate_fn=collate_fn,
-        resize_mode=resize_mode,
     )
 
 
 def create_dataloader_with_weighted_dynamic_bucket_batch_sampler(
     config: Dict,
     mode: str,
-    manifest: List[Dict],
+    dataset: BinarySegmentationDataset,
     collate_fn: Callable,
     shuffle: bool = True,
-    resize_mode: str = "resize",
 ) -> data.DataLoader:
     mode = mode.lower()
     correct_modes = ["train", "test", "val"]
     if mode not in correct_modes:
         raise ValueError(f"Unknown mode: {mode}. Available mods: {correct_modes}")
 
+    manifest = dataset.get_manifest_with_correct_resolution()
     weights = []
     dataset_areas = []
     dataset_aspect_ratios = []
@@ -192,9 +155,8 @@ def create_dataloader_with_weighted_dynamic_bucket_batch_sampler(
     loader_kwargs = {
         "mode": mode,
         "config": config,
-        "manifest": manifest,
+        "dataset": dataset,
         "batch_sampler": batch_sampler,
-        "resize_mode": resize_mode,
     }
     if collate_fn is not None:
         loader_kwargs["collate_fn"] = collate_fn
@@ -203,50 +165,44 @@ def create_dataloader_with_weighted_dynamic_bucket_batch_sampler(
 
 def create_train_dataloader_with_weighted_dynamic_bucket_batch_sampler(
     config: Dict,
-    manifest: List[Dict],
+    dataset: BinarySegmentationDataset,
     collate_fn: Callable,
     shuffle: bool = True,
-    resize_mode: str = "resize",
 ) -> data.DataLoader:
     return create_dataloader_with_weighted_dynamic_bucket_batch_sampler(
         config=config,
         mode="train",
-        manifest=manifest,
+        dataset=dataset,
         collate_fn=collate_fn,
         shuffle=shuffle,
-        resize_mode=resize_mode,
     )
 
 
 def create_test_dataloader_with_weighted_dynamic_bucket_batch_sampler(
     config: Dict,
-    manifest: List[Dict],
+    dataset: BinarySegmentationDataset,
     collate_fn: Callable,
     shuffle: bool = False,
-    resize_mode: str = "resize",
 ) -> data.DataLoader:
     return create_dataloader_with_weighted_dynamic_bucket_batch_sampler(
         config=config,
         mode="test",
-        manifest=manifest,
+        dataset=dataset,
         collate_fn=collate_fn,
         shuffle=shuffle,
-        resize_mode=resize_mode,
     )
 
 
 def create_val_dataloader_with_weighted_dynamic_bucket_batch_sampler(
     config: Dict,
-    manifest: List[Dict],
+    dataset: BinarySegmentationDataset,
     collate_fn: Callable,
     shuffle: bool = False,
-    resize_mode: str = "resize",
 ) -> data.DataLoader:
     return create_dataloader_with_weighted_dynamic_bucket_batch_sampler(
         config=config,
         mode="val",
-        manifest=manifest,
+        dataset=dataset,
         collate_fn=collate_fn,
         shuffle=shuffle,
-        resize_mode=resize_mode,
     )

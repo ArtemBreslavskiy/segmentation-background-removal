@@ -1,12 +1,11 @@
 import torch
 import yaml
 
-from ProjectPaths import ProjectPaths
-from src.logs.logger_setup import configure_loggers, get_logger
+from paths.ProjectPaths import ProjectPaths
 from scripts.build_dataset import build_processed_dataset
-from scripts.train import train
 from scripts.evaluate import evaluate
-
+from scripts.train import train
+from src.logs.logger_setup import configure_loggers, get_logger
 
 if __name__ == "__main__":
     path = ProjectPaths()

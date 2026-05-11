@@ -9,8 +9,119 @@ from PIL import Image
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
-from ProjectPaths import ProjectPaths
-from src.logs.logger_setup import configure_loggers
+from paths.ProjectPaths import ProjectPaths
+from src.logs.logger_setup import configure_loggers, get_logger
+
+
+def _search_correct_directories(path: Path, criteria: Callable[[Path], bool]) -> List[Path]:
+    if not path.is_dir():
+        return []
+    correct_directories = []
+    if criteria(path):
+        correct_directories.append(path)
+    else:
+        paths = [f for f in path.iterdir() if f.is_dir()]
+        for p in paths:
+            correct_directories.extend(_search_correct_directories(p, criteria))
+    return correct_directories
+
+
+def _image_directory_criteria(path: Path) -> bool:
+    name = path.name.lower()
+    keywords = {"image", "img", "im", "images", "picture", "photo", "original"}
+    return any(kw in name for kw in keywords)
+
+
+def _mask_directory_criteria(path: Path) -> bool:
+    name = path.name.lower()
+    keywords = {
+        "mask",
+        "masks",
+        "matt",
+        "matte",
+        "label",
+        "labels",
+        "class",
+        "classes",
+        "object",
+        "gt",
+        "groundtruth",
+        "ground_truth",
+        "seg",
+        "segmentation",
+        "annotation",
+    }
+    return any(kw in name for kw in keywords)
+
+
+def _build_pairs(image_dir: Path, mask_dir: Path, logger: logging.Logger) -> List[Tuple[Path, Path]]:
+    pairs = []
+    mask_dict = {}
+    missing_images = 0
+    for mask_path in mask_dir.rglob("*"):
+        if mask_path.is_file() and mask_path.suffix.lower() in {
+            ".jpg",
+            ".jpeg",
+            ".png",
+        }:
+            mask_dict[mask_path.stem] = mask_path
+    for image_path in image_dir.rglob("*"):
+        if image_path.is_file() and image_path.suffix.lower() in {
+            ".jpg",
+            ".jpeg",
+            ".png",
+        }:
+            stem = image_path.stem
+            if stem in mask_dict:
+                mask_path = mask_dict[stem]
+                pairs.append((image_path, mask_path))
+            else:
+                missing_images += 1
+    used_masks = set(p[1] for p in pairs)
+    unused_masks = len(mask_dict) - len(used_masks)
+    logger.info(f"Unused masks (no corresponding image): {unused_masks}")
+    logger.info(f"Missing images: {missing_images}")
+    logger.info(f"Total pairs: {len(pairs)}")
+    return pairs
+
+
+def _validate_pair(image_dir: Path, mask_dir: Path) -> bool:
+    image_stems = {
+        p.stem for p in image_dir.rglob("*") if p.is_file() and p.suffix.lower() in {".jpg", ".jpeg", ".png"}
+    }
+    mask_stems = {p.stem for p in mask_dir.rglob("*") if p.is_file() and p.suffix.lower() in {".jpg", ".jpeg", ".png"}}
+    return not image_stems.isdisjoint(mask_stems)
+
+
+def _get_image_shape(image_path: Path):
+    try:
+        with Image.open(image_path) as img:
+            return img.height, img.width
+    except Exception:
+        return None, None
+
+
+def _save_manifest(data: List[Tuple[Path, Path, str]], filepath: Path, logger: logging.Logger):
+    manifest = []
+    skipped = 0
+    for d in tqdm(data, desc=f"Saving {filepath.name}", leave=True):
+        image_path, mask_path, source = d
+        resolution = _get_image_shape(image_path)
+        if resolution == (None, None):
+            skipped += 1
+            continue
+        manifest.append(
+            {
+                "image": str(image_path.resolve()),
+                "mask": str(mask_path.resolve()),
+                "source": source,
+                "resolution": resolution,
+            }
+        )
+    if skipped > 0:
+        logger.warning(f"Skipped {skipped} pairs due to image read errors in {filepath}")
+    with open(filepath, "w", encoding="utf-8") as f:
+        json.dump(manifest, f, indent=2, ensure_ascii=False)
 
 
 def build_processed_dataset(config: Dict, logger: Optional[logging.Logger] = None):
@@ -56,95 +167,12 @@ def build_processed_dataset(config: Dict, logger: Optional[logging.Logger] = Non
         msg = "The multi-dataset contains: " + ", ".join(datasets_names) + "."
     logger.info(msg)
 
-    def search_correct_directories(path: Path, criteria: Callable[[Path], bool]) -> List[Path]:
-        if not path.is_dir():
-            return []
-        correct_directories = []
-        if criteria(path):
-            correct_directories.append(path)
-        else:
-            paths = [f for f in path.iterdir() if f.is_dir()]
-            for p in paths:
-                correct_directories.extend(search_correct_directories(p, criteria))
-        return correct_directories
-
-    def image_directory_criteria(path: Path) -> bool:
-        name = path.name.lower()
-        keywords = {"image", "img", "im", "images", "picture", "photo", "original"}
-        return any(kw in name for kw in keywords)
-
-    def mask_directory_criteria(path: Path) -> bool:
-        name = path.name.lower()
-        keywords = {
-            "mask",
-            "masks",
-            "matt",
-            "matte",
-            "label",
-            "labels",
-            "class",
-            "classes",
-            "object",
-            "gt",
-            "groundtruth",
-            "ground_truth",
-            "seg",
-            "segmentation",
-            "annotation",
-        }
-        return any(kw in name for kw in keywords)
-
-    def build_pairs(image_dir: Path, mask_dir: Path) -> List[Tuple[Path, Path]]:
-        pairs = []
-        mask_dict = {}
-        missing = 0
-        for mask_path in mask_dir.rglob("*"):
-            if mask_path.is_file() and mask_path.suffix.lower() in {
-                ".jpg",
-                ".jpeg",
-                ".png",
-            }:
-                mask_dict[mask_path.stem] = mask_path
-        for image_path in image_dir.rglob("*"):
-            if image_path.is_file() and image_path.suffix.lower() in {
-                ".jpg",
-                ".jpeg",
-                ".png",
-            }:
-                stem = image_path.stem
-                if stem in mask_dict:
-                    mask_path = mask_dict[stem]
-                    pairs.append((image_path, mask_path))
-                else:
-                    missing += 1
-        used_masks = set(p[1] for p in pairs)
-        unused_masks = len(mask_dict) - len(used_masks)
-        logger.info(f"Unused masks (no corresponding image): {unused_masks}")
-        logger.info(f"Total pairs: {len(pairs)}, missing: {missing}")
-        return pairs
-
-    def validate_pair(image_dir: Path, mask_dir: Path) -> bool:
-        image_stems = {
-            p.stem for p in image_dir.rglob("*") if p.is_file() and p.suffix.lower() in {".jpg", ".jpeg", ".png"}
-        }
-        mask_stems = {
-            p.stem for p in mask_dir.rglob("*") if p.is_file() and p.suffix.lower() in {".jpg", ".jpeg", ".png"}
-        }
-        return not image_stems.isdisjoint(mask_stems)
-
-    def get_image_shape(image_path: Path):
-        try:
-            with Image.open(image_path) as img:
-                return img.height, img.width
-        except Exception:
-            return None
-
     try:
         logger.info("Data structure recognition...")
         datasets = {}
         for dataset_path in datasets_paths:
-            image_dirs = search_correct_directories(dataset_path, image_directory_criteria)
-            mask_dirs = search_correct_directories(dataset_path, mask_directory_criteria)
+            image_dirs = _search_correct_directories(dataset_path, _image_directory_criteria)
+            mask_dirs = _search_correct_directories(dataset_path, _mask_directory_criteria)
             if len(image_dirs) != len(mask_dirs):
                 logger.warning(
                     f"Mismatch in {dataset_path.name}: {len(image_dirs)} "
@@ -156,8 +184,8 @@ def build_processed_dataset(config: Dict, logger: Optional[logging.Logger] = Non
             for image_path in image_dirs:
                 for mask_path in mask_dirs:
                     if mask_path not in used_masks:
-                        if validate_pair(image_path, mask_path):
-                            file_pairs = build_pairs(image_path, mask_path)
+                        if _validate_pair(image_path, mask_path):
+                            file_pairs = _build_pairs(image_path, mask_path, logger)
                             if file_pairs:
                                 datasets[dataset_path.name].extend(file_pairs)
                                 used_masks.add(mask_path)
@@ -182,7 +210,7 @@ def build_processed_dataset(config: Dict, logger: Optional[logging.Logger] = Non
             (image_path, mask_path, source) for source, pair in datasets.items() for image_path, mask_path in pair
         ]
 
-        logger.info("Splitting dataset into train/val...")
+        logger.info("Splitting dataset into train/test/val...")
         random_seed = config["dataset"]["splits"]["seed"]
         test_ratio = config["dataset"]["splits"]["ratios"]["test"]
         val_ratio = config["dataset"]["splits"]["ratios"]["val"]
@@ -202,34 +230,11 @@ def build_processed_dataset(config: Dict, logger: Optional[logging.Logger] = Non
             random_state=random_seed,
             stratify=test_val_sources,
         )
-        logger.info("Train: %d, Val: %d, Test: %d", len(train), len(val), len(test))
-
-        def save_manifest(data: List[Tuple[Path, Path, str]], filepath: Path):
-            manifest = []
-            skipped = 0
-            for d in tqdm(data, desc=f"Saving {filepath.name}", leave=True):
-                image_path, mask_path, source = d
-                resolution = get_image_shape(image_path)
-                if resolution is None:
-                    skipped += 1
-                    continue
-                manifest.append(
-                    {
-                        "image": str(image_path.resolve()),
-                        "mask": str(mask_path.resolve()),
-                        "source": source,
-                        "resolution": resolution,
-                    }
-                )
-            if skipped > 0:
-                logger.warning(f"Skipped {skipped} pairs due to image read errors in {filepath}")
-            with open(filepath, "w", encoding="utf-8") as f:
-                json.dump(manifest, f, indent=2, ensure_ascii=False)
 
         logger.info("Creating JSON files...")
-        save_manifest(train, path.TRAIN)
-        save_manifest(test, path.TEST)
-        save_manifest(val, path.VAL)
+        _save_manifest(train, path.TRAIN, logger)
+        _save_manifest(test, path.TEST, logger)
+        _save_manifest(val, path.VAL, logger)
         logger.debug("JSON files have been created successfully")
 
         logger.info("=" * 60)
@@ -245,3 +250,14 @@ def build_processed_dataset(config: Dict, logger: Optional[logging.Logger] = Non
     except Exception as ex:
         logger.exception("Error building dataset: %s", ex)
         raise
+
+
+if __name__ == "__main__":
+    path = ProjectPaths()
+    with open(path.CONFIG) as f:
+        config = yaml.safe_load(f)
+
+    configure_loggers(path.CONFIG, path.LOGS)
+    data_logger = get_logger(config["logs"]["types"]["data"]["name"])
+
+    build_processed_dataset(config=config, logger=data_logger)

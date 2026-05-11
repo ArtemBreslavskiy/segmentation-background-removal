@@ -1,9 +1,10 @@
-import pytest
-import torch
-import numpy as np
-import cv2
 import json
 from pathlib import Path
+
+import cv2
+import numpy as np
+import pytest
+import torch
 
 from src.data.BinarySegmentationDataset import BinarySegmentationDataset
 
@@ -21,7 +22,7 @@ class TestBinarySegmentationDataset:
 
     def test_init_with_json_path(self, tmp_path, dummy_manifest):
         json_path = tmp_path / "manifest"
-        with open(json_path, 'w') as f:
+        with open(json_path, "w") as f:
             json.dump(dummy_manifest, f)
 
         dataset = BinarySegmentationDataset(json_path=json_path)
@@ -35,15 +36,15 @@ class TestBinarySegmentationDataset:
 
     def test_no_manifest(self):
         with pytest.raises(ValueError, match="Either json_path or manifest must be provided"):
-            dataset = BinarySegmentationDataset()
+            _ = BinarySegmentationDataset()
 
     def test_empty_manifest(self):
         with pytest.raises(ValueError, match="Either json_path or manifest must be provided"):
-            dataset = BinarySegmentationDataset(manifest=[])
+            _ = BinarySegmentationDataset(manifest=[])
 
     def test_invalid_resize_mode(self, dummy_manifest):
         with pytest.raises(ValueError, match="Unknown mode"):
-            dataset = BinarySegmentationDataset(manifest=dummy_manifest, resize_mode="invalid")
+            _ = BinarySegmentationDataset(manifest=dummy_manifest, resize_mode="invalid")
 
     def test_getitem(self, dummy_manifest):
         dataset = BinarySegmentationDataset(manifest=dummy_manifest)
@@ -66,17 +67,17 @@ class TestBinarySegmentationDataset:
         dummy_manifest[0]["image"] = "/nonexistent/path.png"
         dataset = BinarySegmentationDataset(manifest=dummy_manifest)
         with pytest.raises(FileNotFoundError, match="Image not found"):
-            img, mask = dataset[0]
+            _, _ = dataset[0]
 
     def test_getitem_no_mask(self, dummy_manifest):
         dummy_manifest[0]["mask"] = "/nonexistent/path.png"
         dataset = BinarySegmentationDataset(manifest=dummy_manifest)
         with pytest.raises(FileNotFoundError, match="Mask not found"):
-            img, mask = dataset[0]
+            _, _ = dataset[0]
 
     @pytest.mark.parametrize("resize_mode", ["resize", "crop"])
     def test_getitem_max_resize_square(self, dummy_manifest, resize_mode):
-        dataset = BinarySegmentationDataset(manifest=dummy_manifest, max_area=32*32)
+        dataset = BinarySegmentationDataset(manifest=dummy_manifest, max_area=32 * 32)
         for data in dataset:
             img, mask = data
             assert img.shape[1] == pytest.approx(32, abs=5)
@@ -95,15 +96,14 @@ class TestBinarySegmentationDataset:
         mask_path = tmp_path / "mask.png"
         cv2.imwrite(str(img_path), img)
         cv2.imwrite(str(mask_path), mask)
-        manifest = [{"image": str(img_path), "mask": str(mask_path),
-                     "resolution": [32, 64], "source": "test"}]
+        manifest = [{"image": str(img_path), "mask": str(mask_path), "resolution": [32, 64], "source": "test"}]
 
-        dataset = BinarySegmentationDataset(manifest=manifest, max_area=32*32, resize_mode=resize_mode)
+        dataset = BinarySegmentationDataset(manifest=manifest, max_area=32 * 32, resize_mode=resize_mode)
         img, mask = dataset[0]
         new_h, new_w = img.shape[1], img.shape[2]
 
         assert dataset.resize_mode == resize_mode
-        assert new_h * new_w <= 32*32
+        assert new_h * new_w <= 32 * 32
         assert new_h / new_w == pytest.approx(h / w, abs=0.1)
 
     def test_basic_transforms_applied(self, dummy_manifest, dummy_basic_transforms):
@@ -119,7 +119,7 @@ class TestBinarySegmentationDataset:
     def test_dict_transforms_applied(self, dummy_manifest, dummy_dict_transforms):
         dataset = BinarySegmentationDataset(manifest=dummy_manifest, transforms=dummy_dict_transforms)
         for data in dataset:
-            img, mask = dataset[0]
+            img, mask = data
             assert isinstance(img, torch.Tensor)
             assert isinstance(mask, torch.Tensor)
             assert img.shape[0] == 3

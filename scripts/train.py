@@ -6,13 +6,16 @@ from typing import Dict, Optional
 import torch
 import yaml
 
-from ProjectPaths import ProjectPaths
+from paths.ProjectPaths import ProjectPaths
 from src.engine.Trainer import Trainer
-from src.logs.logger_setup import configure_loggers
+from src.logs.logger_setup import configure_loggers, get_logger
+from src.utils.apply_runtime_env import apply_runtime_env
+from src.utils.random_seed_utils import set_random_seed
 from src.utils.factories.dataloader_factory import (
     create_train_dataloader_with_weighted_dynamic_bucket_batch_sampler,
     create_val_dataloader_with_weighted_dynamic_bucket_batch_sampler,
 )
+from src.utils.factories.dataset_factory import create_train_dataset, create_val_dataset
 from src.utils.factories.loss_fn_factory import create_loss
 from src.utils.factories.metrics_factory import create_metrics
 from src.utils.factories.model_factory import create_model
@@ -29,6 +32,9 @@ def train(config: Dict, logger: Optional[logging.Logger] = None):
     logger.info("=" * 60)
     logger.info("TRAINING STARTED")
     logger.info("=" * 60)
+
+    apply_runtime_env(config)
+    set_random_seed(config)
 
     path = ProjectPaths()
     with open(path.TRAIN) as f:
@@ -68,12 +74,15 @@ def train(config: Dict, logger: Optional[logging.Logger] = None):
 
     collate_fn = get_padding_fn(config)
 
+    train_dataset = create_train_dataset(manifest=train_manifest, config=config)
     train_loader = create_train_dataloader_with_weighted_dynamic_bucket_batch_sampler(
-        config=config, manifest=train_manifest, collate_fn=collate_fn, shuffle=True
+        config=config, dataset=train_dataset, collate_fn=collate_fn, shuffle=True
     )
     logger.info("Train dataloader created")
+
+    val_dataset = create_val_dataset(manifest=val_manifest, config=config)
     val_loader = create_val_dataloader_with_weighted_dynamic_bucket_batch_sampler(
-        config=config, manifest=val_manifest, collate_fn=collate_fn, shuffle=False
+        config=config, dataset=val_dataset, collate_fn=collate_fn, shuffle=False
     )
     logger.info("Val dataloader created")
 
@@ -91,7 +100,6 @@ def train(config: Dict, logger: Optional[logging.Logger] = None):
             config=config,
             logger=logger,
         )
-
     except Exception as ex:
         logger.exception("Trainer initialization failed: %s", ex)
         raise
@@ -124,7 +132,12 @@ def train(config: Dict, logger: Optional[logging.Logger] = None):
     else:
         logger.info("No checkpoint found, starting training from scratch")
 
-    prevent_sleep()
+    if trainer.current_batch_in_epoch > 0:
+        resume_batches = trainer.current_batch_in_epoch
+    else:
+        resume_batches = 0
+
+    prevent_sleep(logger)
 
     logger.info("=" * 60)
     logger.info("STARTING TRAINING LOOP")
@@ -133,20 +146,20 @@ def train(config: Dict, logger: Optional[logging.Logger] = None):
     logger.info("Save criterion: %s", config["learning"]["save_criterion"])
     logger.info("Early stopping patience: %d", config["learning"]["early_stopping_patience"])
     logger.info("Log interval: %d", config["learning"]["log_interval"])
-    logger.info("Accumulation_steps: %d", config["learning"]["accumulation_steps"])
 
     try:
         logger.info("Training samples: %d", len(train_loader.dataset))
         logger.info("Validation samples: %d", len(val_loader.dataset))
-
         trainer.fit(
             train_dataloader=train_loader,
             val_dataloader=val_loader,
             epochs=config["learning"]["epochs"],
+            resume_batches=resume_batches,
             save_criterion=config["learning"]["save_criterion"],
             mode=config["learning"]["mode"],
             early_stopping_patience=config["learning"]["early_stopping_patience"],
             log_interval=config["learning"]["log_interval"],
+            tqdm_mode="no_len",
         )
 
     except KeyboardInterrupt:
@@ -160,4 +173,20 @@ def train(config: Dict, logger: Optional[logging.Logger] = None):
         raise
 
     finally:
-        allow_sleep()
+        allow_sleep(logger)
+
+
+if __name__ == "__main__":
+    path = ProjectPaths()
+    with open(path.CONFIG) as f:
+        config = yaml.safe_load(f)
+
+    configure_loggers(path.CONFIG, path.LOGS)
+    train_logger = get_logger(config["logs"]["types"]["train"]["name"])
+
+    train(config=config, logger=train_logger)
+    try:
+        torch.multiprocessing.set_start_method("spawn", force=True)
+        train_logger.debug("Multiprocessing start method set to 'spawn'")
+    except RuntimeError as ex:
+        train_logger.debug("Multiprocessing start method already set: %s", ex)

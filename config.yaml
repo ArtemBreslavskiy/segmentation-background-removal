@@ -6,6 +6,11 @@ model:
     num_classes: 1
     pretrained: true
     use_aux: false
+    use_gradient_checkpointing: true
+    group_norm_groups: 32
+    group_norm_eps: 1e-5
+    group_norm_preserve_weights: true
+
 
 dataset:
   splits:
@@ -15,93 +20,104 @@ dataset:
     seed: 42
     method: "random"
 
-  max_area: 1048576  #1024**2
-  resize_mode: "crop"
+  max_area: 500000
+  resize:
+    train:
+      mode: "mix-b"
+      area_threshold_mix: 3000000
+      min_foreground: 0.01
+    test:
+      mode: "resize"
+    val:
+      mode: "resize"
 
   weights:
-    AISegment: 1.0
-    AM-2k: 1.0
-    DIS5K: 1.0
-    DUTS: 1.0
-    HRS10K: 1.0
-    HRSOD: 1.0
-    MaSS13K: 1.0
-    P3M-10k: 1.0
-    ToonOut: 1.0
-    UHRSD: 1.0
+    AISegment: 0.44
+    AM-2k: 1.81
+    DIS5K: 1.65
+    DUTS: 0.79
+    HRS10K: 0.81
+    HRSOD: 1.62
+    MaSS13K: 0.71
+    P3M-10k: 0.81
+    ToonOut: 1.31
+    UHRSD: 1.05
+
 
 dataloader:
   batch_sizes:
     train: null
-    val: null
     test: null
+    val: null
+
   shuffle:
     train: null
-    val: null
     test: null
+    val: null
 
   seed: 42
-  num_workers: 4
+  num_workers: 8
   pin_memory: true
   persistent_workers: true
-  prefetch_factor: 2
+  prefetch_factor: 4
+
   sampler:
     class: "src.data.WeightedDynamicBucketBatchSampler.WeightedDynamicBucketBatchSampler"
     params:
-      base_batch_size: 8
       max_batch_size: 32
       min_batch_size: 1
-      reference_area: 262144  #512**2
-      replacement: True
-      skip_overload_examples: True
-      send_overload_report: True
+      max_load: 1000000
+      replacement: true
+      skip_overload_examples: true
+      send_overload_report: true
+
   pad_collate:
     enabled: true
     alignment: 32
     pad_value: 0.0
+    mode: "reflect"
+
 
 learning:
+  use_cuda: true
   epochs: 100
   early_stopping_patience: 15
-  accumulation_steps: 1
-  use_pixels_accumulation: True
-  pixels_per_step: 3e6
-  use_fp16: True
-  use_gradient_checkpointing: True
-  compile_model: true
-  compile_dynamic: true
-  compile_options: "default"
-  log_interval: 5
+  log_interval: 1
   save_criterion: "val/iou"
   mode: "max"
-  use_cuda: True
   threshold: 0.5
+  use_fp16: true
+
+  compile_model: false
+  compile_dynamic: false
+  compile_options: "reduce-overhead"
+
+  accumulation_steps: 1
+  use_pixels_accumulation: true
+  pixels_per_step: 8000000
+
 
   loss:
     class: "src.losses.ComboLoss.ComboLoss"
     params:
-      weights: [ 0.1, 0.9 ]
+      weights: [ 0.15, 0.85 ]
       loss_functions:
-        - class: "src.losses.FocalLoss.FocalLoss"
+        - class: "src.losses.MaskedFocalLoss.MaskedFocalLoss"
           params:
-            alpha: 0.8
+            alpha: 0.6
             gamma: 2.5
-            reduction: 'mean'
+            reduction: "mean"
             smooth: 1e-6
 
         - class: "src.losses.MaskedPixelwiseSoftDiceLoss.MaskedPixelwiseSoftDiceLoss"
           params: {}
 
   optimizer:
-    class: "adam_mini.Adam_mini"
+    class: "torch.optim.AdamW"
     params:
       lr: 1e-4
       weight_decay: 1e-4
-      betas: [0.9, 0.999]
-      eps: 1e-8
-      dim: 512
-      n_heads: 8
-      model_sharding: false
+      fused: true
 
   scheduler:
     class: "torch.optim.lr_scheduler.CosineAnnealingWarmRestarts"
@@ -110,32 +126,46 @@ learning:
       T_mult: 2
       eta_min: 1e-7
 
+
+runtime:
+  cuda_alloc:
+    expandable_segments: false
+    max_split_size_mb: 0
+  nvml_check: true
+  cudnn_cache_limit: -1
+  allow_tf32: true
+  torch_compile:
+    disable_triton: false
+    cpp_wrapper: false
+    max_autotune: false
+
+
 evaluating:
   metrics:
-    - name: 'iou'
+    - name: "iou"
       class: "torchmetrics.JaccardIndex"
       params:
-        task: 'binary'
+        task: "binary"
 
-    - name: 'accuracy'
+    - name: "accuracy"
       class: "torchmetrics.Accuracy"
       params:
-        task: 'binary'
+        task: "binary"
 
-    - name: 'precision'
+    - name: "precision"
       class: "torchmetrics.Precision"
       params:
-        task: 'binary'
+        task: "binary"
 
-    - name: 'recall'
+    - name: "recall"
       class: "torchmetrics.Recall"
       params:
-        task: 'binary'
+        task: "binary"
 
-    - name: 'f1'
+    - name: "f1"
       class: "torchmetrics.F1Score"
       params:
-        task: 'binary'
+        task: "binary"
 
     - name: 'specificity'
       class: "torchmetrics.Specificity"
@@ -146,6 +176,7 @@ evaluating:
       class: "torchmetrics.MatthewsCorrCoef"
       params:
         task: 'binary'
+
 
 logs:
   default:

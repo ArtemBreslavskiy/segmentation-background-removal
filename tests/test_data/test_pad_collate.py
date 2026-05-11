@@ -1,5 +1,6 @@
-import pytest
 from typing import Callable
+
+import pytest
 
 from src.data.pad_collate import pad_collate
 
@@ -23,10 +24,22 @@ class TestPadCollate:
         padded_mask1, padded_mask2 = masks[0], masks[1]
         valid1, valid2 = valids[0], valids[1]
 
-        assert (padded_img1.shape[1] == padded_img2.shape[1] == padded_mask1.shape[1]
-                == padded_mask2.shape[1] == valid1.shape[1] == valid2.shape[1])
-        assert (padded_img1.shape[2] == padded_img2.shape[2] == padded_mask1.shape[2]
-                == padded_mask2.shape[2] == valid1.shape[2] == valid2.shape[2])
+        assert (
+            padded_img1.shape[1]
+            == padded_img2.shape[1]
+            == padded_mask1.shape[1]
+            == padded_mask2.shape[1]
+            == valid1.shape[1]
+            == valid2.shape[1]
+        )
+        assert (
+            padded_img1.shape[2]
+            == padded_img2.shape[2]
+            == padded_mask1.shape[2]
+            == padded_mask2.shape[2]
+            == valid1.shape[2]
+            == valid2.shape[2]
+        )
 
     def test_valid_mask(self, dummy_batch):
         data1, data2 = dummy_batch

@@ -1,7 +1,7 @@
 from typing import Dict, Union
 
 import albumentations as A
-from albumentations.pytorch import ToTensorV2
+import albumentations.pytorch as AP
 import cv2
 
 
@@ -12,11 +12,11 @@ def get_train_transforms() -> Dict[str, Union[A.Compose, A.BasicTransform]]:
             A.VerticalFlip(p=0.1),
             A.RandomRotate90(p=0.5),
             A.Affine(
+                scale=(0.85, 1.15),
                 translate_percent=(-0.1, 0.1),
-                rotate=(-15, 15),
+                rotate=(-20, 20),
                 shear=(-5, 5),
                 p=0.7,
-                border_mode=cv2.BORDER_REFLECT_101,
                 interpolation=cv2.INTER_LINEAR,
                 mask_interpolation=cv2.INTER_NEAREST,
             ),
@@ -29,9 +29,8 @@ def get_train_transforms() -> Dict[str, Union[A.Compose, A.BasicTransform]]:
             A.RandomBrightnessContrast(brightness_limit=0.25, contrast_limit=0.25, p=0.5),
             A.HueSaturationValue(hue_shift_limit=15, sat_shift_limit=25, val_shift_limit=15, p=0.5),
             A.RGBShift(r_shift_limit=20, g_shift_limit=20, b_shift_limit=20, p=0.3),
-            A.CLAHE(clip_limit=2.0, tile_grid_size=(8, 8), p=0.3),
             A.RandomGamma(gamma_limit=(70, 130), p=0.3),
-            A.GaussNoise(std_range=(0.05, 0.15), p=0.2),
+            A.GaussNoise(var_limit=(0.05, 0.15), p=0.2),
             A.Blur(blur_limit=3, p=0.2),
             A.RandomShadow(
                 shadow_roi=(0, 0.5, 1, 1),
@@ -46,11 +45,11 @@ def get_train_transforms() -> Dict[str, Union[A.Compose, A.BasicTransform]]:
     final_image = A.Compose(
         [
             A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-            ToTensorV2,
+            AP.ToTensorV2(),
         ]
     )
 
-    final_mask = ToTensorV2
+    final_mask = AP.ToTensorV2()
 
     return {
         "geometric": geometric,
@@ -64,11 +63,11 @@ def get_val_test_transforms() -> Dict[str, Union[A.Compose, A.BasicTransform]]:
     final_image = A.Compose(
         [
             A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-            ToTensorV2,
+            AP.ToTensorV2(),
         ]
     )
 
-    final_mask = ToTensorV2
+    final_mask = AP.ToTensorV2()
 
     return {
         "geometric": None,

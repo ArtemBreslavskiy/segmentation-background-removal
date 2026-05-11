@@ -4,8 +4,8 @@ model:
 dataset:
   splits:
     ratios:
-      val: 0.05
-      test: 0.05
+      val: 0.1
+      test: 0.1
     seed: 42
     method: "random"
 
@@ -23,7 +23,7 @@ dataloader:
   persistent_workers: true
   prefetch_factor: 2
   pad_collate:
-    enabled: true
+    enabled: false
     alignment: 32
     pad_value: 0.0
 
@@ -31,15 +31,14 @@ learning:
   epochs: 100
   early_stopping_patience: 15
   accumulation_steps: 1
-  use_pixels_accumulation: True
+  use_pixels_accumulation: false
   pixels_per_step: 0
-  use_fp16: True
-  use_gradient_checkpointing: True
+  use_fp16: false
   compile_model: false
   compile_dynamic: false
   compile_options: "default"
   log_interval: 5
   save_criterion: "val/iou"
   mode: "max"
-  use_cuda: True
+  use_cuda: false
   threshold: 0.5

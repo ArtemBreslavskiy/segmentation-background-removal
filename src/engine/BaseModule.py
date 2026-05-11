@@ -10,7 +10,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.utils.data as data
 import torchmetrics
-from torch.cuda.amp import GradScaler, autocast
+from torch.amp import GradScaler, autocast
 from tqdm import tqdm
 
 from src.losses.ComboLoss import ComboLoss
@@ -30,42 +30,31 @@ class BaseModule(ABC):
         logger: Optional[logging.Logger] = None,
     ):
         self.logger = logger if logger is not None else logging.getLogger(__name__)
-        if model is None:
-            error_msg = "model cannot be none"
-            self.logger.error(error_msg)
-            raise ValueError(error_msg)
-        if not isinstance(model, nn.Module):
-            error_msg = "Unsupported model type"
-            self.logger.error(error_msg)
-            raise ValueError(error_msg)
+        self.loss_function = self._validate_loss_function(loss_function)
+        self.config = self._validate_config(config)
+        self.device = self._validate_device(device)
 
-        if loss_function is None:
-            error_msg = "loss_function cannot be none"
-            self.logger.error(error_msg)
-            raise ValueError(error_msg)
-        if not isinstance(loss_function, (nn.Module, Callable)):
-            error_msg = "Unsupported loss_function type"
-            self.logger.error(error_msg)
-            raise ValueError(error_msg)
+        if optimizer is not None:
+            self.optimizer = self._validate_optimizer(optimizer)
+        else:
+            self.optimizer = None
 
-        if config is None:
-            error_msg = "config cannot be none"
-            self.logger.error(error_msg)
-            raise ValueError(error_msg)
-        if not isinstance(config, Dict):
-            error_msg = "Unsupported config type"
-            self.logger.error(error_msg)
-            raise ValueError(error_msg)
+        model = self._validate_model(model)
+        model = model.to(self.device)
+        if self.config["learning"].get("compile_model", False):
+            model = torch.compile(
+                model,
+                dynamic=self.config["learning"].get("compile_dynamic", True),
+                mode=self.config["learning"].get("compile_options", "default")
+            )
+        self.model = model
 
-        self.optimizer = optimizer
-        self.loss_function = loss_function
-        self.device = self._device_validate(device)
-        self.model = model.to(self.device)
-        self.config = config
+        use_amp = self.config["learning"].get("use_fp16", False) and self.device.type == "cuda"
+        self.scaler = GradScaler(self.device.type, enabled=use_amp)
         self.log_dir = self._ensure_log_dir(log_dir)
         self.has_components = isinstance(self.loss_function, ComboLoss)
-        self.scaler = GradScaler(enabled=self.config["learning"].get("use_fp16", False))
         self.current_epoch = 0
+        self.current_batch_in_epoch = 0
 
         if metrics is None or metrics == {}:
             self.metrics = {}
@@ -75,24 +64,55 @@ class BaseModule(ABC):
             self.model_name = model_name
         else:
             self.model_name = self.config["model"].get("model_name", "model")
-        if self.config["learning"].get("compile_model", False):
-            compile_dynamic = self.config["learning"].get("compile_dynamic", True)
-            compile_options = self.config["learning"].get("compile_options", "default")
-            self.model = torch.compile(self.model, dynamic=compile_dynamic, mode=compile_options)
 
-    def _device_validate(self, device: Union[torch.device, str, None]):
+    def _validate_model(self, model: nn.Module) -> nn.Module:
+        if model is None:
+            error_msg = "model cannot be none"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+        if not isinstance(model, nn.Module):
+            error_msg = "Unsupported model type"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+        return model
+
+    def _validate_loss_function(self, loss_function: Union[nn.Module, Callable]) -> Union[nn.Module, Callable]:
+        if loss_function is None:
+            error_msg = "loss_function cannot be none"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+        if not isinstance(loss_function, (nn.Module, Callable)):
+            error_msg = "Unsupported loss_function type"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+        return loss_function
+
+    def _validate_config(self, config: Dict) -> Dict:
+        if config is None:
+            error_msg = "config cannot be none"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+        if not isinstance(config, Dict):
+            error_msg = "Unsupported configuration format"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+        if len(config) == 0:
+            error_msg = "config cannot be empty"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+        return config
+
+    def _validate_device(self, device: Union[torch.device, str, None]) -> torch.device:
         if device is None:
             return torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
         if isinstance(device, str):
             try:
-                device = torch.device(device)
+                return torch.device(device)
             except Exception as ex:
                 error_msg = f"Invalid device parameter value: {device}. {ex}"
                 self.logger.error(error_msg)
                 raise ValueError(error_msg)
-
-        if isinstance(device, torch.device):
+        elif isinstance(device, torch.device):
             if device.type == "cuda" and not torch.cuda.is_available():
                 error_msg = "GPU is not available"
                 self.logger.error(error_msg)
@@ -103,7 +123,51 @@ class BaseModule(ABC):
         self.logger.error(error_msg)
         raise ValueError(error_msg)
 
-    def _validate_predictions(self, predictions):
+    def _validate_optimizer(self, optimizer: optim.Optimizer) -> optim.Optimizer:
+        if optimizer is None:
+            error_msg = "optimizer cannot be none"
+            self.logger.exception(error_msg)
+            raise ValueError(error_msg)
+        if not isinstance(optimizer, optim.Optimizer):
+            error_msg = "Unsupported optimizer type"
+            self.logger.exception(error_msg)
+            raise ValueError(error_msg)
+        return optimizer
+
+    def _validate_dataloader(self, dataloader: data.DataLoader) -> data.DataLoader:
+        if dataloader is None:
+            error_msg = "dataloader cannot be none"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+        if not isinstance(dataloader, data.DataLoader):
+            error_msg = "Unsupported dataloader type"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+        if len(dataloader.dataset) == 0:
+            error_msg = "dataloader dataset cannot be empty"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+        return dataloader
+
+    def _validata_run_epoch_mode(self, mode: str) -> str:
+        mode = mode.lower()
+        correct_modes = ["train", "val", "test"]
+        if mode not in correct_modes:
+            error_msg = f"Unknown mode: {mode}. Available modes: {correct_modes}"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+        return mode
+
+    def _validata_run_epoch_tqdm_mode(self, tqdm_mode: str) -> str:
+        tqdm_mode = tqdm_mode.lower()
+        correct_tqdm_modes = [None, "default", "no_len"]
+        if tqdm_mode not in correct_tqdm_modes:
+            error_msg = f"Unknown tqdm_mode: {tqdm_mode}. Available tqdm_modes: {correct_tqdm_modes}"
+            self.logger.error(error_msg)
+            raise ValueError(error_msg)
+        return tqdm_mode
+
+    def _validate_predictions(self, predictions: torch.Tensor) -> torch.Tensor:
         if predictions is None:
             error_msg = "predictions cannot be none"
             self.logger.error(error_msg)
@@ -112,8 +176,9 @@ class BaseModule(ABC):
             error_msg = "Unsupported predictions format"
             self.logger.error(error_msg)
             raise ValueError(error_msg)
+        return predictions
 
-    def _validate_targets(self, targets):
+    def _validate_targets(self, targets: torch.Tensor) -> torch.Tensor:
         if targets is None:
             error_msg = "targets cannot be none"
             self.logger.error(error_msg)
@@ -122,8 +187,9 @@ class BaseModule(ABC):
             error_msg = "Unsupported targets format"
             self.logger.error(error_msg)
             raise ValueError(error_msg)
+        return targets
 
-    def _validate_metrics(self, metrics) -> Dict[str, torchmetrics.Metric]:
+    def _validate_metrics(self, metrics: Dict[str, torchmetrics.Metric]) -> Dict[str, torchmetrics.Metric]:
         if metrics is None or metrics == {}:
             error_msg = "metrics cannot be none or empty"
             self.logger.error(error_msg)
@@ -136,9 +202,19 @@ class BaseModule(ABC):
         self.logger.error(error_msg)
         raise ValueError(error_msg)
 
-    def _ensure_log_dir(self, log_dir: Union[str, Path]):
+    def _run_epoch_request_optimizer(self):
+        if self.optimizer is None:
+            error_msg = "Optimizer required for training mode"
+            self.logger.error(error_msg)
+            raise RuntimeError(error_msg)
+        if not isinstance(self.optimizer, optim.Optimizer):
+            error_msg = "Unsupported optimizer type"
+            self.logger.error(error_msg)
+            raise RuntimeError(error_msg)
+
+    def _ensure_log_dir(self, log_dir: Union[str, Path]) -> Path:
         if not isinstance(log_dir, (str, Path)) and log_dir is not None:
-            error_msg = f"unsupported path format"
+            error_msg = "unsupported path format"
             self.logger.error(error_msg)
             raise ValueError(error_msg)
 
@@ -151,10 +227,9 @@ class BaseModule(ABC):
         log_dir.mkdir(parents=True, exist_ok=True)
         checkpoints_dir = log_dir / "checkpoints"
         checkpoints_dir.mkdir(parents=True, exist_ok=True)
-
         return log_dir
 
-    def _move_batch_to_device(self, batch: Union[Tuple, List, Dict]):
+    def _move_batch_to_device(self, batch: Union[Tuple, List, Dict]) -> Union[Tuple, List, Dict, torch.Tensor]:
         if batch is None:
             error_msg = "Batch cannot be none"
             self.logger.error(error_msg)
@@ -174,7 +249,7 @@ class BaseModule(ABC):
         self.logger.error(error_msg)
         raise ValueError(error_msg)
 
-    def _unpack_batch(self, batch: Union[Tuple, List, Dict]):
+    def _unpack_batch(self, batch: Union[Tuple, List, Dict]) -> Tuple:
         if isinstance(batch, (Tuple, List)):
             if len(batch) == 2:
                 return batch[0], batch[1]
@@ -220,7 +295,7 @@ class BaseModule(ABC):
         if not isinstance(threshold, float):
             try:
                 threshold = float(threshold)
-            except:
+            except Exception:
                 threshold = self.config["learning"]["threshold"]
 
         probs = torch.sigmoid(predictions)
@@ -233,11 +308,12 @@ class BaseModule(ABC):
         for metric in metrics.values():
             metric.reset()
 
-    def _compute_metrics(self, metrics: Dict[str, torchmetrics.Metric]):
+    def _compute_metrics(self, metrics: Dict[str, torchmetrics.Metric]) -> Dict[str, torchmetrics.Metric]:
         metrics = self._validate_metrics(metrics)
         return {name: metric.compute().item() for name, metric in metrics.items()}
 
-    def _compute_loss(self, predictions, targets, return_components=False):
+    def _compute_loss(self, predictions: torch.Tensor, targets: torch.Tensor, return_components: bool = False
+        ) -> Union[Tuple, torch.Tensor]:
         self._validate_predictions(predictions)
         self._validate_targets(targets)
 
@@ -250,43 +326,31 @@ class BaseModule(ABC):
                 return loss, {"loss": loss}
             return loss
 
+    def _learn(self):
+        if self.scaler.is_enabled():
+            self.scaler.step(self.optimizer)
+        else:
+            self.optimizer.step()
+        if self.scaler.is_enabled():
+            self.scaler.update()
+        self.optimizer.zero_grad()
+
     def run_epoch(
         self,
         dataloader: data.DataLoader,
         mode: str,
         metrics: Optional[Dict[str, torchmetrics.Metric]] = None,
+        tqdm_mode: Optional[str] = "default",
+        resume_batches: int = 0,
     ) -> Dict[str, float]:
-        mode = mode.lower()
-        correct_modes = ["train", "val", "test"]
-        if mode not in correct_modes:
-            error_msg = f"Unknown mode: {mode}. Available mods: {correct_modes}"
-            self.logger.error(error_msg)
-            raise ValueError(error_msg)
-
-        if dataloader is None:
-            error_msg = "dataloader cannot be none"
-            self.logger.error(error_msg)
-            raise ValueError(error_msg)
-        if not isinstance(dataloader, data.DataLoader):
-            error_msg = "Unsupported dataloader type"
-            self.logger.error(error_msg)
-            raise ValueError(error_msg)
-        if len(dataloader) == 0:
-            error_msg = "dataloader cannot be empty"
-            self.logger.error(error_msg)
-            raise ValueError(error_msg)
-
+        mode = self._validata_run_epoch_mode(mode)
+        tqdm_mode = self._validata_run_epoch_tqdm_mode(tqdm_mode)
+        self._validate_dataloader(dataloader)
         if mode == "train":
-            if self.optimizer is None:
-                error_msg = "Optimizer required for training mode"
-                self.logger.error(error_msg)
-                raise RuntimeError(error_msg)
-            if not isinstance(self.optimizer, optim.Optimizer):
-                error_msg = "Unsupported optimizer type"
-                self.logger.error(error_msg)
-                raise RuntimeError(error_msg)
+            self._run_epoch_request_optimizer()
 
         if self.device.type == "cuda" and torch.cuda.is_available():
+            torch.cuda.empty_cache()
             torch.cuda.reset_peak_memory_stats()
             memory_before = torch.cuda.memory_allocated() / 1024**2
             self.logger.debug(f"Memory before {mode}: {memory_before:.1f}MB")
@@ -303,11 +367,11 @@ class BaseModule(ABC):
         start_time = time.time()
         total_loss = 0.0
         num_batches = 0
-        current_metrics = self.metrics if metrics is None or mode in ["train", "val"] \
-            else self._validate_metrics(metrics)
+        current_metrics = (self.metrics if metrics is None or mode in ["train", "val"]
+                           else self._validate_metrics(metrics))
         self._reset_metrics(current_metrics)
 
-        pixels_per_step = self.config["learning"].get("pixels_per_step", 0)
+        pixels_per_step = int(self.config["learning"].get("pixels_per_step", 0))
         accumulation_steps = self.config["learning"].get("accumulation_steps", 1)
         use_pixels_accumulation = pixels_per_step > 0
         if pixels_per_step:
@@ -318,17 +382,34 @@ class BaseModule(ABC):
         else:
             total_components = {"loss": 0.0}
         desc = "Evaluating..." if mode == "test" else f"{mode.capitalize()} Epoch {self.current_epoch}"
-        pbar = tqdm(dataloader, desc=desc, leave=True)
+
+        data_iter = iter(dataloader)
+        if resume_batches > 0:
+            for _ in range(resume_batches):
+                next(data_iter)
+
+        if tqdm_mode is not None:
+            if tqdm_mode == "default":
+                data_iter = tqdm(data_iter, desc=desc, leave=True)
+            elif tqdm_mode == "no_len":
+
+                class NoLenIterable:
+                    def __init__(self, iterable):
+                        self.iterable = iterable
+
+                    def __iter__(self):
+                        return iter(self.iterable)
+
+                data_iter = tqdm(NoLenIterable(data_iter), desc=desc, leave=True)
 
         with grad_context:
             if train:
                 self.optimizer.zero_grad()
-            for batch in pbar:
+            for batch in data_iter:
                 try:
                     batch = self._move_batch_to_device(batch)
                     if len(batch) == 3:
                         x, y, valid_mask = self._unpack_batch(batch)
-                        valid_mask = None
                     else:
                         x, y = self._unpack_batch(batch)
                         valid_mask = None
@@ -337,7 +418,7 @@ class BaseModule(ABC):
                     else:
                         num_pixels = x.shape[0] * x.shape[2] * x.shape[3]
 
-                    with autocast(self.config["learning"].get("use_fp16", False)):
+                    with autocast(self.device.type, enabled=self.scaler.is_enabled()):
                         predictions = self.model(x)
                         loss, components = self._compute_loss(predictions, y, return_components=True)
 
@@ -350,36 +431,43 @@ class BaseModule(ABC):
                                 for param in self.model.parameters():
                                     if param.grad is not None:
                                         param.grad /= accumulated_pixels
-                                self.scaler.step(self.optimizer)
-                                self.scaler.update()
-                                self.optimizer.zero_grad()
+                                self._learn()
                                 accumulated_pixels = 0
                         else:
                             loss = loss / accumulation_steps
                             self.scaler.scale(loss).backward()
                             if (num_batches + 1) % accumulation_steps == 0:
-                                self.scaler.step(self.optimizer)
-                                self.scaler.update()
-                                self.optimizer.zero_grad()
+                                self._learn()
 
                     self._update_metrics(predictions, y, current_metrics)
                     total_loss += loss.item()
                     num_batches += 1
+                    self.current_batch_in_epoch = num_batches
                     for name in total_components.keys():
                         total_components[name] += components[name].item()
 
-                    pbar.set_postfix(
-                        {
+                    if isinstance(data_iter, tqdm):
+                        data_iter.set_postfix({
                             "loss": f"{loss.item():.4f}",
                             "speed": (
                                 f"{num_batches / (time.time() - start_time):.1f} it/s" if num_batches > 0 else "N/A"
-                            ),
-                        }
-                    )
+                            )})
                 except Exception as ex:
                     self.logger.error(f"Error in {mode} batch {num_batches}: {ex}")
                     if mode == "train":
                         self.logger.warning(f"Skipping train batch {num_batches}")
+                        if "x" in locals():
+                            del x
+                        if "y" in locals():
+                            del y
+                        if "predictions" in locals():
+                            del predictions
+                        if "loss" in locals():
+                            del loss
+                        if "components" in locals():
+                            del components
+                        if "valid_mask" in locals():
+                            del valid_mask
                         torch.cuda.empty_cache()
                         self.optimizer.zero_grad()
                         if use_pixels_accumulation:
@@ -392,13 +480,17 @@ class BaseModule(ABC):
                 for param in self.model.parameters():
                     if param.grad is not None:
                         param.grad /= accumulated_pixels
-                self.scaler.step(self.optimizer)
-                self.scaler.update()
-                self.optimizer.zero_grad()
+                self._learn()
             elif train and not use_pixels_accumulation and num_batches % accumulation_steps != 0:
-                self.scaler.step(self.optimizer)
-                self.scaler.update()
-                self.optimizer.zero_grad()
+                self._learn()
+
+        if num_batches == 0:
+            self.logger.warning("No batches processed, returning NaN metrics")
+            return {
+                "loss": float("nan"),
+                **{k: float("nan") for k in current_metrics},
+                **{k: float("nan") for k in total_components},
+            }
 
         if self.device.type == "cuda" and torch.cuda.is_available():
             memory_after = torch.cuda.memory_allocated() / 1024**2
@@ -408,7 +500,6 @@ class BaseModule(ABC):
             )
 
         elapsed_time = time.time() - start_time
-
         self.logger.info(
             f"{mode.capitalize()} epoch completed in {elapsed_time:.2f}s, "
             f"{num_batches / elapsed_time:.2f} batches/sec"
@@ -417,6 +508,7 @@ class BaseModule(ABC):
         avg_loss = total_loss / num_batches
         avg_components = {name: total / num_batches for name, total in total_components.items()}
         metrics_values = self._compute_metrics(current_metrics)
+        self.current_batch_in_epoch = 0
 
         metrics_str = ", ".join([f"{k}={v:.4f}" for k, v in metrics_values.items()])
         self.logger.info(f"{mode.capitalize()} completed: loss={avg_loss:.4f}, {metrics_str}")

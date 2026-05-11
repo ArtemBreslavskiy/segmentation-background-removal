@@ -1,17 +1,14 @@
 from typing import List, Tuple, Union
 
-import numpy as np
 import torch
 import torch.nn.functional as F
 
 
 def pad_collate(
-    batch: List[Tuple[Union[torch.Tensor, ]]],
-    alignment: int = 32,
-    pad_value: float = 0.0,
+    batch: List[Tuple[Union[torch.Tensor,]]], alignment: int = 32, pad_value: float = 0.0, mode="constant"
 ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     if not batch:
-        raise ValueError("Butch cannot be empty")
+        raise ValueError("Batch cannot be empty")
 
     max_h, max_w = 0, 0
     images = []
@@ -50,9 +47,14 @@ def pad_collate(
         valid = valid_tuple[0]
         pad_h = max_h - h
         pad_w = max_w - w
-        image_pad = F.pad(image, (0, pad_w, 0, pad_h), value=pad_value)
-        mask_pad = F.pad(mask, (0, pad_w, 0, pad_h), value=pad_value)
-        valid_pad = F.pad(valid, (0, pad_w, 0, pad_h), value=0.0)
+
+        if mode == "reflect" and (pad_w >= w or pad_h >= h):
+            mode = "constant"
+        pad_tuple = (0, pad_w, 0, pad_h)
+
+        image_pad = F.pad(image, pad_tuple, value=pad_value, mode=mode)
+        mask_pad = F.pad(mask, pad_tuple, value=pad_value, mode=mode)
+        valid_pad = F.pad(valid, pad_tuple, value=0.0, mode=mode)
         padded_images.append(image_pad)
         padded_masks.append(mask_pad)
         padded_valid.append(valid_pad)

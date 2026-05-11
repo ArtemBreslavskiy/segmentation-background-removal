@@ -1,5 +1,6 @@
 import segmentation_models_pytorch as smp
 import torch.nn as nn
+from torch.utils.checkpoint import checkpoint
 
 
 class DeepLabV3Plus(nn.Module):
@@ -49,12 +50,23 @@ class DeepLabV3Plus(nn.Module):
             )
 
         if use_gradient_checkpointing:
-            if hasattr(self.model.encoder, "set_grad_checkpointing"):
-                self.model.encoder.set_grad_checkpointing(True)
-            elif hasattr(self.model.encoder, "gradient_checkpointing"):
-                self.model.encoder.gradient_checkpointing = True
-            else:
-                print("Warning: Gradient checkpointing could not be enabled for this encoder.")
+            encoder = self.model.encoder
+            self._wrap_blocks_in_stages(encoder)
+
+    def _wrap_blocks_in_stages(self, module):
+        for name, child in list(module.named_children()):
+            if "block" in name and isinstance(child, nn.Module):
+                original_forward = child.forward
+
+                def make_checkpoint_forward(orig_forward):
+                    def forward_wrapper(*args, **kwargs):
+                        return checkpoint(orig_forward, *args, use_reentrant=False, **kwargs)
+
+                    return forward_wrapper
+
+                child.forward = make_checkpoint_forward(original_forward)
+            elif hasattr(child, "children"):
+                self._wrap_blocks_in_stages(child)
 
     def _replace_bn_with_gn(
         self,

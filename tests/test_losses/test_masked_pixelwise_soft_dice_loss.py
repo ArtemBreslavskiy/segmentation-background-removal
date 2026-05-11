@@ -234,7 +234,7 @@ class TestMaskedPixelwiseSoftDiceLoss:
         pred = torch.randn(2, 1, height, width)
         target = torch.randint(0, 2, (2, 1, height, width)).float()
         valid_mask = torch.zeros(2, 1, height, width)
-        valid_mask[:, :, :height//2, :] = 1.0
+        valid_mask[:, :, : height // 2, :] = 1.0
 
         loss = loss_function(pred, target, valid_mask)
 

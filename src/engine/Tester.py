@@ -9,6 +9,9 @@ import torch.utils.data as data
 import torchmetrics
 
 from src.engine.BaseModule import BaseModule
+from src.utils.factories.loss_fn_factory import create_loss
+from src.utils.factories.metrics_factory import create_metrics
+from src.utils.factories.model_factory import create_model
 
 
 class Tester(BaseModule):
@@ -34,24 +37,28 @@ class Tester(BaseModule):
             logger=logger,
         )
 
-    def evaluate(
-        self,
-        dataloader: data.DataLoader,
-        metrics: Optional[Dict[str, torchmetrics.Metric]] = None
-    ) -> Dict[str, float]:
-
+    def _validate_test_dataloader(self, dataloader):
         if dataloader is None:
-            error_msg = "dataloader cannot be none"
+            error_msg = "test_dataloader cannot be none"
             self.logger.exception(error_msg)
             raise ValueError(error_msg)
         if not isinstance(dataloader, data.DataLoader):
-            error_msg = "Unsupported dataloader type"
+            error_msg = "Unsupported test_dataloader type"
             self.logger.exception(error_msg)
             raise ValueError(error_msg)
-        if len(dataloader) == 0:
-            error_msg = "dataloader cannot be empty"
+        if len(dataloader.dataset) == 0:
+            error_msg = "test_dataloader dataset cannot be empty"
             self.logger.exception(error_msg)
             raise ValueError(error_msg)
+        return dataloader
+
+    def evaluate(
+        self,
+        dataloader: data.DataLoader,
+        metrics: Optional[Dict[str, torchmetrics.Metric]] = None,
+        tqdm_mode: Optional[str] = "default",
+    ) -> Dict[str, float]:
+        self._validate_dataloader(dataloader)
 
         if metrics is None:
             metrics = self.metrics
@@ -62,7 +69,7 @@ class Tester(BaseModule):
         self.logger.info(f"Starting evaluation on {len(dataloader)} batches")
         self.logger.debug(f"Using metrics: {list(metrics.keys())}")
 
-        metrics_values = self.run_epoch(dataloader, "test", metrics)
+        metrics_values = self.run_epoch(dataloader, "test", metrics, tqdm_mode=tqdm_mode)
 
         self.logger.info("Evaluation completed")
 
@@ -89,10 +96,6 @@ class Tester(BaseModule):
         config = checkpoint["config"]
         if config is None or len(config) == 0:
             raise ValueError("Checkpoint does not contain config. Cannot restore components.")
-
-        from src.utils.factories.loss_fn_factory import create_loss
-        from src.utils.factories.metrics_factory import create_metrics
-        from src.utils.factories.model_factory import create_model
 
         model = create_model(config)
         loss_function = create_loss(config)

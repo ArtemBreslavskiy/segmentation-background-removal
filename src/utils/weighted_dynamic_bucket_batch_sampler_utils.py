@@ -18,6 +18,7 @@ def get_padding_fn(config: Dict):
             pad_collate,
             alignment=config["dataloader"]["pad_collate"]["alignment"],
             pad_value=config["dataloader"]["pad_collate"]["pad_value"],
+            mode=config["dataloader"]["pad_collate"]["mode"],
         )
     else:
         collate_fn = None

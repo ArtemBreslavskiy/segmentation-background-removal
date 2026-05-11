@@ -5,12 +5,13 @@ from typing import Dict, Optional
 import torch
 import yaml
 
-from ProjectPaths import ProjectPaths
+from paths.ProjectPaths import ProjectPaths
 from src.engine.Tester import Tester
-from src.logs.logger_setup import configure_loggers
+from src.logs.logger_setup import configure_loggers, get_logger
 from src.utils.factories.dataloader_factory import (
     create_test_dataloader_with_weighted_dynamic_bucket_batch_sampler,
 )
+from src.utils.factories.dataset_factory import create_test_dataset
 from src.utils.factories.metrics_factory import create_metrics
 from src.utils.weighted_dynamic_bucket_batch_sampler_utils import get_padding_fn
 
@@ -59,8 +60,9 @@ def evaluate(config: Dict, logger: Optional[logging.Logger] = None):
     try:
         collate_fn = get_padding_fn(config)
 
+        test_dataset = create_test_dataset(manifest=test_manifest, config=config)
         val_loader = create_test_dataloader_with_weighted_dynamic_bucket_batch_sampler(
-            config=config, manifest=test_manifest, collate_fn=collate_fn, shuffle=False
+            config=config, dataset=test_dataset, collate_fn=collate_fn, shuffle=False
         )
         logger.info("Test dataloader created")
 
@@ -81,3 +83,14 @@ def evaluate(config: Dict, logger: Optional[logging.Logger] = None):
     except Exception:
         logger.exception("Error during evaluation")
         raise
+
+
+if __name__ == "__main__":
+    path = ProjectPaths()
+    with open(path.CONFIG) as f:
+        config = yaml.safe_load(f)
+
+    configure_loggers(path.CONFIG, path.LOGS)
+    evaluate_logger = get_logger(config["logs"]["types"]["evaluate"]["name"])
+
+    evaluate(config=config, logger=evaluate_logger)
