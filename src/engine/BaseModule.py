@@ -353,7 +353,7 @@ class BaseModule(ABC):
             torch.cuda.empty_cache()
             torch.cuda.reset_peak_memory_stats()
             memory_before = torch.cuda.memory_allocated() / 1024**2
-            self.logger.debug(f"Memory before {mode}: {memory_before:.1f}MB")
+            self.logger.debug("Memory before %s: %.1fMB", mode, memory_before)
 
         if mode == "train":
             train = True
@@ -387,6 +387,7 @@ class BaseModule(ABC):
         if resume_batches > 0:
             for _ in range(resume_batches):
                 next(data_iter)
+            self.logger.debug("The epoch continues from the %s batch", resume_batches)
 
         if tqdm_mode is not None:
             if tqdm_mode == "default":
@@ -442,7 +443,8 @@ class BaseModule(ABC):
                     self._update_metrics(predictions, y, current_metrics)
                     total_loss += loss.item()
                     num_batches += 1
-                    self.current_batch_in_epoch = num_batches
+                    if mode == "train":
+                        self.current_batch_in_epoch = num_batches
                     for name in total_components.keys():
                         total_components[name] += components[name].item()
 
@@ -455,7 +457,7 @@ class BaseModule(ABC):
                 except Exception as ex:
                     self.logger.error(f"Error in {mode} batch {num_batches}: {ex}")
                     if mode == "train":
-                        self.logger.warning(f"Skipping train batch {num_batches}")
+                        self.logger.warning("Skipping train batch %s", num_batches)
                         if "x" in locals():
                             del x
                         if "y" in locals():
@@ -496,13 +498,14 @@ class BaseModule(ABC):
             memory_after = torch.cuda.memory_allocated() / 1024**2
             peak_memory = torch.cuda.max_memory_allocated() / 1024**2
             self.logger.debug(
-                f"{mode.capitalize()} memory - Final: {memory_after:.1f}MB, " f"Peak: {peak_memory:.1f}MB"
+                "%s memory - Final: %.1fMB, Peak: %.1fMB",
+                mode.capitalize(), memory_after, peak_memory
             )
 
         elapsed_time = time.time() - start_time
         self.logger.info(
-            f"{mode.capitalize()} epoch completed in {elapsed_time:.2f}s, "
-            f"{num_batches / elapsed_time:.2f} batches/sec"
+            "%s epoch completed in %.2fs, %.2f batches/sec",
+            mode.capitalize(), elapsed_time, num_batches / elapsed_time
         )
 
         avg_loss = total_loss / num_batches
@@ -511,6 +514,9 @@ class BaseModule(ABC):
         self.current_batch_in_epoch = 0
 
         metrics_str = ", ".join([f"{k}={v:.4f}" for k, v in metrics_values.items()])
-        self.logger.info(f"{mode.capitalize()} completed: loss={avg_loss:.4f}, {metrics_str}")
+        self.logger.info(
+            "%s completed: loss=%.4f, %s",
+            mode.capitalize(), avg_loss, metrics_str
+        )
 
         return {"loss": avg_loss, **metrics_values, **avg_components}

@@ -20,11 +20,11 @@ dataset:
     seed: 42
     method: "random"
 
-  max_area: 500000
+  max_area: 400000
   resize:
     train:
       mode: "mix-b"
-      area_threshold_mix: 3000000
+      area_threshold_mix: 2400000
       min_foreground: 0.01
     test:
       mode: "resize"
@@ -66,7 +66,7 @@ dataloader:
     params:
       max_batch_size: 32
       min_batch_size: 1
-      max_load: 1000000
+      max_load: 800000
       replacement: true
       skip_overload_examples: true
       send_overload_report: true
@@ -94,7 +94,7 @@ learning:
 
   accumulation_steps: 1
   use_pixels_accumulation: true
-  pixels_per_step: 8000000
+  pixels_per_step: 6400000
 
 
   loss:

@@ -170,6 +170,8 @@ def train(config: Dict, logger: Optional[logging.Logger] = None):
 
     except Exception as ex:
         logger.exception("Fatal error during training: %s", ex)
+        logger.info("Saving checkpoint before exit due to error")
+        trainer.save_checkpoint(is_best=False)
         raise
 
     finally:

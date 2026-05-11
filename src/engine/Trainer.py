@@ -50,7 +50,9 @@ class Trainer(BaseModule):
             self.scheduler = None
         self.optimizer = self._validate_optimizer(optimizer)
         self.save_criterion = None
+        self.patience_counter = 0
         self.best_value = None
+        self.interrupted_in = None
         self.metrics_history = {
             "train": {name: [] for name in self.metrics.keys()},
             "val": {name: [] for name in self.metrics.keys()},
@@ -130,17 +132,20 @@ class Trainer(BaseModule):
     def train_epoch(self, dataloader: data.DataLoader, tqdm_mode: Optional[str] = "default", resume_batches: int = 0
                     ) -> Dict[str, float]:
         self._validate_train_dataloader(dataloader)
+        self.interrupted_in = "train"
         metrics_values = self.run_epoch(dataloader, mode="train", tqdm_mode=tqdm_mode, resume_batches=resume_batches)
         for name, value in metrics_values.items():
             self.metrics_history["train"].setdefault(name, []).append(value)
+        self.interrupted_in = None
         return metrics_values
 
-    def validate_epoch(self, dataloader: data.DataLoader, tqdm_mode: Optional[str] = "default", resume_batches: int = 0
-                       ) -> Dict[str, float]:
+    def validate_epoch(self, dataloader: data.DataLoader, tqdm_mode: Optional[str] = "default") -> Dict[str, float]:
         self._validate_val_dataloader(dataloader)
-        metrics_values = self.run_epoch(dataloader, mode="val", tqdm_mode=tqdm_mode, resume_batches=resume_batches)
+        self.interrupted_in = "val"
+        metrics_values = self.run_epoch(dataloader, mode="val", tqdm_mode=tqdm_mode)
         for name, value in metrics_values.items():
             self.metrics_history["val"].setdefault(name, []).append(value)
+        self.interrupted_in = None
         return metrics_values
 
     def fit(
@@ -177,13 +182,37 @@ class Trainer(BaseModule):
             def is_better(current, best):
                 return current > best
 
-        patience_counter = 0
-        for _ in range(remaining_epochs):
-            self.current_epoch += 1
-            train_metrics = self.train_epoch(train_dataloader, tqdm_mode=tqdm_mode, resume_batches=resume_batches)
+        resume_incomplete_train = (self.current_batch_in_epoch > 0) and (self.interrupted_in == "train")
+        resume_incomplete_val = (self.interrupted_in == "val") and (not resume_incomplete_train)
+        if resume_incomplete_train or resume_incomplete_val:
+            remaining_epochs += 1
 
-            if val_dataloader is not None:
-                val_metrics = self.validate_epoch(val_dataloader, tqdm_mode=tqdm_mode, resume_batches=resume_batches)
+        for _ in range(remaining_epochs):
+            if resume_incomplete_train:
+                resume_incomplete_train = False
+
+                train_metrics = self.train_epoch(train_dataloader, tqdm_mode=tqdm_mode, resume_batches=resume_batches)
+                if val_dataloader is not None:
+                    val_metrics = self.validate_epoch(val_dataloader, tqdm_mode=tqdm_mode)
+
+            elif resume_incomplete_val:
+                resume_incomplete_val = False
+
+                train_metrics = {name: self.metrics_history["train"][name][-1]
+                                 for name in self.metrics_history["train"]
+                                 if self.metrics_history["train"][name]}
+                if not train_metrics:
+                    self.logger.warning("No train history found for interrupted validation, running full epoch")
+                    train_metrics = self.train_epoch(train_dataloader, tqdm_mode=tqdm_mode, resume_batches=0)
+
+                if val_dataloader is not None:
+                    val_metrics = self.validate_epoch(val_dataloader, tqdm_mode=tqdm_mode)
+
+            else:
+                self.current_epoch += 1
+                train_metrics = self.train_epoch(train_dataloader, tqdm_mode=tqdm_mode, resume_batches=0)
+                if val_dataloader is not None:
+                    val_metrics = self.validate_epoch(val_dataloader, tqdm_mode=tqdm_mode)
 
             if self.save_criterion.startswith("val/") and val_dataloader is not None:
                 key = self.save_criterion[4:]
@@ -217,20 +246,20 @@ class Trainer(BaseModule):
                     self.best_value,
                 )
                 self.save_checkpoint(is_best=True)
-                patience_counter = 0
+                self.patience_counter = 0
             else:
-                patience_counter += 1
+                self.patience_counter += 1
                 self.logger.debug(
                     "Epoch %d: %s = %.4f (best: %.4f, patience: %d/%s)",
                     self.current_epoch,
                     self.save_criterion,
                     current_value,
                     self.best_value,
-                    patience_counter,
+                    self.patience_counter,
                     early_stopping_patience or "∞",
                 )
 
-            if early_stopping_patience and patience_counter >= early_stopping_patience:
+            if early_stopping_patience and self.patience_counter >= early_stopping_patience:
                 self.logger.warning(
                     "Early stopping triggered after %d epochs without improvement. Best %s: %.4f",
                     early_stopping_patience,
@@ -249,6 +278,7 @@ class Trainer(BaseModule):
 
             if self.current_epoch % log_interval == 0 and log_interval != -1:
                 self.logger.info("Checkpoint saved for epoch %d (intermediate).", self.current_epoch)
+                self.interrupted_in = None
                 self.save_checkpoint(is_best=False)
 
     def save_checkpoint(self, is_best: bool = False):
@@ -262,8 +292,10 @@ class Trainer(BaseModule):
         checkpoint = {
             "epoch": self.current_epoch,
             "current_batch_in_epoch": self.current_batch_in_epoch,
+            "interrupted_in": self.interrupted_in,
             "model_name": self.model_name,
             "save_criterion": self.save_criterion,
+            "patience_counter": self.patience_counter,
             "best_value": self.best_value,
             "model_state_dict": self.model.state_dict(),
             "optimizer_state_dict": self.optimizer.state_dict(),
@@ -305,7 +337,9 @@ class Trainer(BaseModule):
         self.model_name = checkpoint["model_name"]
         self.current_epoch = checkpoint["epoch"]
         self.current_batch_in_epoch = checkpoint.get("current_batch_in_epoch", 0)
+        self.interrupted_in = checkpoint.get("interrupted_in", None)
         self.save_criterion = checkpoint["save_criterion"]
+        self.patience_counter = checkpoint.get("patience_counter", 0)
         self.best_value = checkpoint["best_value"]
         self.metrics_history = checkpoint["metrics_history"]
         self.logger = logger if logger is not None else logging.getLogger(__name__)

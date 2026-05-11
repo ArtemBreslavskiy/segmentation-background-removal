@@ -50,6 +50,8 @@ class BinarySegmentationDataset(data.Dataset):
         return image, mask
 
     def _crop(self, image, mask, h, w, min_foreground=50):
+        if h > image.shape[0] or w > image.shape[1]:
+            raise ValueError(f"Crop size ({h},{w}) exceeds image size {image.shape[:2]}")
         for _ in range(10):
             crop = A.RandomCrop(height=h, width=w, p=1.0)
             transformed = crop(image=image, mask=mask)
@@ -69,25 +71,29 @@ class BinarySegmentationDataset(data.Dataset):
             new_w = int(w * scale)
 
             if self.resize_mode == "resize":
-                return self._resize(image, mask, new_h, new_w)
+                return self._resize(image, mask, h=new_h, w=new_w)
             if self.resize_mode == "crop":
-                return self._crop(image, mask, new_h, new_w, int(new_h * new_w * self.min_foreground_share))
+                return self._crop(image, mask, h=new_h, w=new_w,
+                                  min_foreground=int(new_h * new_w * self.min_foreground_share))
 
             if self.resize_mode == "mix-a":
                 if area > self.area_threshold_mixed:
-                    return self._resize(image, mask, new_h, new_w)
+                    return self._resize(image, mask, h=new_h, w=new_w)
                 else:
-                    return self._crop(image, mask, new_h, new_w, int(new_h * new_w * self.min_foreground_share))
+                    return self._crop(image, mask, h=new_h, w=new_w,
+                                      min_foreground=int(new_h * new_w * self.min_foreground_share))
 
             if self.resize_mode == "mix-b":
                 if area > self.area_threshold_mixed:
                     scale = np.sqrt(self.area_threshold_mixed / (h * w))
                     intermediate_h = int(h * scale)
                     intermediate_w = int(w * scale)
-                    image, mask = self._resize(image, mask, intermediate_h, intermediate_w)
-                    return self._crop(image, mask, new_h, new_w, int(new_h * new_w * self.min_foreground_share))
+                    image, mask = self._resize(image, mask, h=intermediate_h, w=intermediate_w)
+                    return self._crop(image, mask, h=new_h, w=new_w,
+                                      min_foreground=int(new_h * new_w * self.min_foreground_share))
                 else:
-                    return self._crop(image, mask, new_h, new_w, int(new_h * new_w * self.min_foreground_share))
+                    return self._crop(image, mask, h=new_h, w=new_w,
+                                      min_foreground=int(new_h * new_w * self.min_foreground_share))
         return image, mask
 
     def get_manifest_with_correct_resolution(self):
