@@ -1,12 +1,13 @@
-from typing import List, Tuple, Union
-
 import torch
 import torch.nn.functional as F
 
 
 def pad_collate(
-    batch: List[Tuple[Union[torch.Tensor,]]], alignment: int = 32, pad_value: float = 0.0, mode="constant"
-) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    batch: list[tuple[torch.Tensor, torch.Tensor]],
+    alignment: int = 32,
+    pad_value: float = 0.0,
+    mode="constant",
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     if not batch:
         raise ValueError("Batch cannot be empty")
 
@@ -21,17 +22,20 @@ def pad_collate(
             image = image.float()
         else:
             image = torch.from_numpy(image).permute(2, 0, 1).float()
+
         if isinstance(mask, torch.Tensor):
             mask = mask.float()
         else:
             mask = torch.from_numpy(mask).float()
+
         if mask.dim() == 2:
             mask = mask.unsqueeze(0)
 
-        h, w = image.shape[-2], image.shape[-1]
+        _, h, w = image.shape
         max_h = max(max_h, h)
         max_w = max(max_w, w)
         valid = torch.ones(1, h, w, dtype=torch.float32)
+
         images.append((image, h, w))
         masks.append((mask, h, w))
         valid_masks.append((valid, h, w))
@@ -40,7 +44,10 @@ def pad_collate(
         max_h = ((max_h + alignment - 1) // alignment) * alignment
         max_w = ((max_w + alignment - 1) // alignment) * alignment
 
-    padded_images, padded_masks, padded_valid = [], [], []
+    padded_images = []
+    padded_masks = []
+    padded_valid = []
+
     for img_tuple, mask_tuple, valid_tuple in zip(images, masks, valid_masks):
         image, h, w = img_tuple
         mask = mask_tuple[0]
@@ -55,6 +62,7 @@ def pad_collate(
         image_pad = F.pad(image, pad_tuple, value=pad_value, mode=mode)
         mask_pad = F.pad(mask, pad_tuple, value=pad_value, mode=mode)
         valid_pad = F.pad(valid, pad_tuple, value=0.0, mode=mode)
+
         padded_images.append(image_pad)
         padded_masks.append(mask_pad)
         padded_valid.append(valid_pad)
