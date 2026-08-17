@@ -1,6 +1,7 @@
 import json
 import numpy as np
 import torch.utils.data as data
+import cv2
 from pathlib import Path
 from src.utils.resize import resize, crop, resize_mix_a, resize_mix_b, get_scale_hw
 from src.data.transforms import Transforms
