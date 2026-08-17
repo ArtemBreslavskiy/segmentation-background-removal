@@ -18,7 +18,7 @@ class BinarySegmentationDataset(data.Dataset):
         resize_mode: str = "resize",
         max_area: int = 512 * 512,
         area_threshold_mix: int = 1024 * 1024,
-        min_foreground_share: float = 0,
+        min_foreground_share: float = 0.0,
     ):
         resize_mode = resize_mode.lower()
         self._validate_resize_mode(resize_mode)

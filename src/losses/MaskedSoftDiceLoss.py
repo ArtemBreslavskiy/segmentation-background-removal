@@ -2,16 +2,16 @@ import torch
 import torch.nn as nn
 
 
-class MaskedPixelwiseSoftDiceLoss(nn.Module):
+class MaskedSoftDiceLoss(nn.Module):
     def __init__(self, smooth=1.0):
         super().__init__()
-        self.smooth = smooth
+        self.smooth = float(smooth)
 
     def forward(self, logits, targets, valid_mask=None):
         B = logits.size(0)
         probs = torch.sigmoid(logits)
         probs_flat = probs.view(B, -1)
-        targets_flat = targets.view(B, -1)
+        targets_flat = targets.view(B, -1).float()
         if valid_mask is not None:
             valid_flat = valid_mask.view(B, -1)
             probs_flat = probs_flat * valid_flat
