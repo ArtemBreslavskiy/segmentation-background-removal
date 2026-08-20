@@ -1,6 +1,5 @@
 import logging
 import time
-import gc
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -327,15 +326,16 @@ class BaseModule(ABC):
                 self.optimizer.zero_grad()
             while True:
                 try:
-                    num_batches += 1
-                    if mode == "train":
-                        self.current_batch_in_epoch = num_batches
                     batch = next(data_iter)
                 except StopIteration:
                     break
                 except Exception as ex:
                     self.logger.error("Error loading batch %d: %s, skipped", num_batches, ex)
                     continue
+
+                num_batches += 1
+                if mode == "train":
+                    self.current_batch_in_epoch = num_batches
 
                 try:
                     batch = self._move_batch_to_device(batch)
@@ -354,12 +354,18 @@ class BaseModule(ABC):
                         predictions = self.model(x)
                         if torch.isnan(predictions).any() or torch.isinf(predictions).any():
                             self.logger.warning("NaN/Inf in model output, skipping batch %d", num_batches)
+                            self.optimizer.zero_grad()
+                            if use_pixels_accumulation:
+                                accumulated_pixels = 0
                             continue
 
                         loss, components = self._compute_loss(predictions, y, valid_mask, return_components=True)
 
                     if torch.isnan(loss) or torch.isinf(loss):
                         self.logger.warning("NaN or Inf loss detected, skipping batch %d", num_batches)
+                        self.optimizer.zero_grad()
+                        if use_pixels_accumulation:
+                            accumulated_pixels = 0
                         continue
 
                     if train:
@@ -374,7 +380,7 @@ class BaseModule(ABC):
                         else:
                             loss = loss / accumulation_steps
                             self.scaler.scale(loss).backward()
-                            if (num_batches + 1) % accumulation_steps == 0:
+                            if num_batches % accumulation_steps == 0:
                                 self._learn()
 
                     self._update_metrics(predictions, y, current_metrics)
@@ -393,6 +399,9 @@ class BaseModule(ABC):
                     self.logger.error(f"Error in {mode} batch {num_batches}: {ex}")
                     if mode == "train":
                         self.logger.warning("Skipping train batch %s", num_batches)
+                        self.optimizer.zero_grad()
+                        if use_pixels_accumulation:
+                            accumulated_pixels = 0
                         continue
                     else:
                         raise
