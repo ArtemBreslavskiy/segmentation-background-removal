@@ -129,6 +129,12 @@ class BaseModule(ABC):
         if isinstance(metrics, dict):
             return metrics
 
+    @staticmethod
+    def _validate_optimizer(optimizer: optim.Optimizer) -> optim.Optimizer:
+        if optimizer is None:
+            raise ValueError("optimizer cannot be none")
+        return optimizer
+
     def _request_optimizer(self):
         if self.optimizer is None:
             raise RuntimeError("Optimizer required for training mode")
