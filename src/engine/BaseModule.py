@@ -15,6 +15,7 @@ from tqdm import tqdm
 from src.losses.ComboLoss import ComboLoss
 from src.configs.schemas.model.model import ModelConfig
 from src.configs.schemas.learning.learning import LearningConfig
+from src.utils.logger_setup import get_null_logger
 
 
 class BaseModule(ABC):
@@ -41,7 +42,7 @@ class BaseModule(ABC):
         self.optimizer = optimizer
         self.metrics = {name: metric.to(self.device) for name, metric in metrics.items()} or {}
 
-        self.logger = logger if logger is not None else logging.getLogger(__name__)
+        self.logger = logger if logger is not None else get_null_logger()
         self.log_dir = self._ensure_log_dir(log_dir)
 
         use_amp = self.learning_config.use_fp16 and self.device.type == "cuda"
