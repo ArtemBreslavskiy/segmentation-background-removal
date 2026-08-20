@@ -5,7 +5,6 @@ import torch.utils.data as data
 import torchmetrics
 from datetime import datetime
 from pathlib import Path
-from typing import Callable
 from src.engine.BaseModule import BaseModule
 from src.utils.factories.loss_fn_factory import create_loss
 from src.utils.factories.metrics_factory import create_metrics
@@ -20,7 +19,7 @@ class Tester(BaseModule):
         model: nn.Module,
         model_config: ModelConfig,
         learning_config: LearningConfig,
-        loss_function: nn.Module | Callable,
+        loss_function: nn.Module | callable,
         metrics: dict[str, torchmetrics.Metric] | None = None,
         log_dir: str | Path | None = None,
         device: torch.device | str | None = None,

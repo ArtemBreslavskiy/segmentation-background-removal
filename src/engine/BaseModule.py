@@ -9,7 +9,6 @@ from pydantic import BaseModel as PydenticBaseModel
 from abc import ABC
 from contextlib import nullcontext
 from pathlib import Path
-from typing import Callable
 from torch.amp import GradScaler, autocast
 from tqdm import tqdm
 from src.losses.ComboLoss import ComboLoss
@@ -26,7 +25,7 @@ class BaseModule(ABC):
         model: nn.Module,
         model_config: ModelConfig,
         learning_config: LearningConfig,
-        loss_function: nn.Module | Callable,
+        loss_function: nn.Module | callable,
         optimizer: optim.Optimizer | None = None,
         log_dir: str | Path | None = None,
         metrics: dict[str, torchmetrics.Metric] | None = None,
