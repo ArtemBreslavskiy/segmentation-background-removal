@@ -9,7 +9,6 @@ class SegFormer(nn.Module):
         encoder_name: str = "nvidia/mit-b5",
         pretrained: bool = True,
         num_classes: int = 1,
-        use_aux: bool = False,
         use_gradient_checkpointing: bool = False,
         group_norm_groups: int = 0,
         group_norm_eps: float = 1e-5,
@@ -21,10 +20,6 @@ class SegFormer(nn.Module):
             raise ValueError("group_norm_groups must be >= 0")
 
         super().__init__()
-        self.use_aux = use_aux
-
-        if encoder_name == "mit_b5":
-            encoder_name = "nvidia/mit-b5"
 
         if pretrained:
             self.model = SegformerForSemanticSegmentation.from_pretrained(
@@ -47,9 +42,6 @@ class SegFormer(nn.Module):
 
         if use_gradient_checkpointing:
             self.model.gradient_checkpointing_enable()
-
-        if use_aux:
-            print("Warning: SegFormer does not support auxiliary heads, use_aux will be ignored.")
 
     def _replace_bn_with_gn(
         self,
@@ -80,7 +72,7 @@ class SegFormer(nn.Module):
         logits = F.interpolate(
             logits,
             size=(H, W),
-            mode='bilinear',
+            mode="bilinear",
             align_corners=False
         )
         return logits
