@@ -1,0 +1,49 @@
+seed: 50
+num_workers: 2
+pin_memory: true
+persistent_workers: false
+prefetch_factor: 2
+
+batch_sizes:
+  train: null
+  test: null
+  val: null
+
+shuffle:
+  train: null
+  test: null
+  val: null
+
+samplers:
+  train:
+    type: "wdb"
+    max_batch_size: 32
+    min_batch_size: 1
+    max_load: 1048576
+    replacement: true
+    skip_overload_examples: true
+    send_overload_report: true
+
+  test:
+    type: "wdb"
+    max_batch_size: 32
+    min_batch_size: 1
+    max_load: 1048576
+    replacement: false
+    skip_overload_examples: false
+    send_overload_report: true
+
+  val:
+    type: "wdb"
+    max_batch_size: 32
+    min_batch_size: 1
+    max_load: 1048576
+    replacement: false
+    skip_overload_examples: false
+    send_overload_report: true
+
+pad_collate:
+  enabled: true
+  alignment: 32
+  pad_value: 0.0
+  mode: "reflect"

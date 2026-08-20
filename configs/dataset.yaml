@@ -1,0 +1,25 @@
+type: "binary_segmentation"
+max_area: 262144
+
+splits:
+  seed: 42
+  val_ratio: 0.05
+  test_ratio: 0.05
+
+resizes:
+  train:
+    mode: "mix-b"
+    threshold: 1572864
+    min_foreground_share: 0.05
+  test:
+    mode: "resize"
+  val:
+    mode: "resize"
+
+weights:
+  DIS5K: 1.1
+  MaSS13K: 0.5
+  P3M-10k: 0.6
+  UHRSD: 0.8
+  ThinObject5K: 0.9
+  AM-2k: 1.0

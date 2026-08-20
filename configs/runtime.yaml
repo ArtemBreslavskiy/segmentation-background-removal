@@ -1,0 +1,10 @@
+cuda_alloc:
+  expandable_segments: true
+  max_split_size_mb: 0
+nvml_check: true
+cudnn_cache_limit: -1
+allow_tf32: true
+torch_compile:
+  disable_triton: false
+  cpp_wrapper: false
+  max_autotune: false

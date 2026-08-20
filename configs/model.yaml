@@ -1,0 +1,11 @@
+model_name: "BinarySegmentation"
+
+init:
+  type: "SegFormer"
+  encoder_name: "nvidia/mit-b5"
+  num_classes: 1
+  pretrained: true
+  use_gradient_checkpointing: true
+  group_norm_groups: 32
+  group_norm_eps: 1e-5
+  group_norm_preserve_weights: true

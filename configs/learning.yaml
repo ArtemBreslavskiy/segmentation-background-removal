@@ -1,0 +1,44 @@
+use_cuda: true
+use_fp16: true
+threshold: 0.5
+
+epochs: 250
+early_stopping_patience: 15
+log_interval: 1
+save_criterion: "val/iou"
+mode: "max"
+
+compile_model: false
+compile_dynamic: false
+compile_options: "reduce-overhead"
+
+accumulation_steps: 8
+use_pixels_accumulation: false
+pixels_per_step: 0
+
+loss:
+  type: "combo_loss"
+  weights: [ 0.2, 0.8 ]
+  loss_functions:
+    - type: "masked_focal_loss"
+      alpha: 0.5
+      gamma: 2.5
+      reduction: "mean"
+      smooth: 1e-6
+
+    - type: "masked_tversky_loss"
+      alpha: 0.9
+      beta: 0.1
+      smooth: 1e-6
+
+optimizer:
+  type: "torch_adam_w"
+  lr: 1e-4
+  weight_decay: 1e-4
+  fused: true
+
+scheduler:
+  type: "torch_cosine_annealing_warm_restarts"
+  T_0: 10
+  T_mult: 2
+  eta_min: 1e-7

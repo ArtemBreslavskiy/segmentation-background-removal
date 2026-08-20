@@ -1,0 +1,21 @@
+metrics:
+  - name: "iou"
+    task: "binary"
+
+  - name: "accuracy"
+    task: "binary"
+
+  - name: "precision"
+    task: "binary"
+
+  - name: "recall"
+    task: "binary"
+
+  - name: "f1"
+    task: "binary"
+
+  - name: "specificity"
+    task: "binary"
+
+  - name: "mcc"
+    task: "binary"
