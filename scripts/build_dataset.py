@@ -1,19 +1,19 @@
 import json
 import logging
 import shutil
-from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple
-
 import yaml
 from PIL import Image
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
-
+from pathlib import Path
+from typing import Callable
 from paths.project_paths import ProjectPaths
-from src.logging.logger_setup import get_logger
+from src.utils.logger_setup import get_logger, get_null_logger
+from src.configs.schemas.dataset.dataset import BinarySegmentationDatasetConfig
+from src.configs.loader import load_dataset_config
 
 
-def _search_correct_directories(path: Path, criteria: Callable[[Path], bool]) -> List[Path]:
+def _search_correct_directories(path: Path, criteria: Callable[[Path], bool]) -> list[Path]:
     if not path.is_dir():
         return []
     correct_directories = []
@@ -35,49 +35,34 @@ def _image_directory_criteria(path: Path) -> bool:
 def _mask_directory_criteria(path: Path) -> bool:
     name = path.name.lower()
     keywords = {
-        "mask",
-        "masks",
-        "matt",
-        "matte",
-        "label",
-        "labels",
-        "class",
-        "classes",
-        "gt",
-        "groundtruth",
-        "ground_truth",
-        "seg",
-        "segmentation",
-        "annotation",
+        "mask", "masks", "matt", "matte", "label",
+        "labels", "class", "classes", "gt", "groundtruth",
+        "ground_truth", "seg", "segmentation", "annotation",
     }
     return any(kw in name for kw in keywords)
 
 
-def _build_pairs(image_dir: Path, mask_dir: Path, logger: logging.Logger) -> List[Tuple[Path, Path]]:
+def _build_pairs(image_dir: Path, mask_dir: Path, logger: logging.Logger) -> list[tuple[Path, Path]]:
     pairs = []
     mask_dict = {}
     missing_images = 0
+
     for mask_path in mask_dir.rglob("*"):
-        if mask_path.is_file() and mask_path.suffix.lower() in {
-            ".jpg",
-            ".jpeg",
-            ".png",
-        }:
+        if mask_path.is_file() and mask_path.suffix.lower() in {".jpg", ".jpeg", ".png"}:
             mask_dict[mask_path.stem] = mask_path
+
     for image_path in image_dir.rglob("*"):
-        if image_path.is_file() and image_path.suffix.lower() in {
-            ".jpg",
-            ".jpeg",
-            ".png",
-        }:
+        if image_path.is_file() and image_path.suffix.lower() in {".jpg", ".jpeg", ".png"}:
             stem = image_path.stem
             if stem in mask_dict:
                 mask_path = mask_dict[stem]
                 pairs.append((image_path, mask_path))
             else:
                 missing_images += 1
+
     used_masks = set(p[1] for p in pairs)
     unused_masks = len(mask_dict) - len(used_masks)
+
     logger.info(f"Unused masks (no corresponding image): {unused_masks}")
     logger.info(f"Missing images: {missing_images}")
     logger.info(f"Total pairs: {len(pairs)}")
@@ -86,9 +71,15 @@ def _build_pairs(image_dir: Path, mask_dir: Path, logger: logging.Logger) -> Lis
 
 def _validate_pair(image_dir: Path, mask_dir: Path) -> bool:
     image_stems = {
-        p.stem for p in image_dir.rglob("*") if p.is_file() and p.suffix.lower() in {".jpg", ".jpeg", ".png"}
+        p.stem for p in image_dir.rglob("*")
+        if p.is_file() and p.suffix.lower()
+        in {".jpg", ".jpeg", ".png"}
     }
-    mask_stems = {p.stem for p in mask_dir.rglob("*") if p.is_file() and p.suffix.lower() in {".jpg", ".jpeg", ".png"}}
+    mask_stems = {
+        p.stem for p in mask_dir.rglob("*")
+        if p.is_file() and p.suffix.lower()
+        in {".jpg", ".jpeg", ".png"}
+    }
     return not image_stems.isdisjoint(mask_stems)
 
 
@@ -100,73 +91,70 @@ def _get_image_shape(image_path: Path):
         return None, None
 
 
-def _save_manifest(data: List[Tuple[Path, Path, str]], filepath: Path, logger: logging.Logger):
+def _save_manifest(data: list[tuple[Path, Path, str]], filepath: Path, logger: logging.Logger):
     manifest = []
     skipped = 0
-    for d in tqdm(data, desc=f"Saving {filepath.name}", leave=True):
-        image_path, mask_path, source = d
+    for item in tqdm(data, desc=f"Saving {filepath.name}", leave=True):
+        image_path, mask_path, source = item
         resolution = _get_image_shape(image_path)
         if resolution == (None, None):
             skipped += 1
             continue
-        manifest.append(
-            {
-                "image": str(image_path.resolve()),
-                "mask": str(mask_path.resolve()),
-                "source": source,
-                "resolution": resolution,
-            }
-        )
+
+        manifest.append({
+            "image": str(image_path.resolve()),
+            "mask": str(mask_path.resolve()),
+            "source": source,
+            "resolution": resolution,
+        })
+
     if skipped > 0:
         logger.warning(f"Skipped {skipped} pairs due to image read errors in {filepath}")
     with open(filepath, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=2, ensure_ascii=False)
 
 
-def build_processed_dataset(config: Dict, logger: Optional[logging.Logger] = None):
-    if logger is None:
-        logger = logging.getLogger(__name__)
-
-    logger.info("=" * 60)
-    logger.info("BUILDING PROCESSED DATASET")
-    logger.info("=" * 60)
-
-    path = ProjectPaths()
-    logger.info("Raw data path: %s", path.RAW_DATA)
-    logger.info("Processed data path: %s", path.PROCESSED_DATA)
-
-    if not path.RAW_DATA.exists():
-        error_msg = f"Raw data not found at: {path.RAW_DATA}"
-        logger.exception(error_msg)
-        raise ValueError(error_msg)
-
-    if path.PROCESSED_DATA.exists():
-        logger.warning("Processed directory already exists: %s", path.PROCESSED_DATA)
-        logger.info("Interactive mode: asking user for confirmation")
-        response = input("Delete and recreate? (y/n): ").strip().lower()
-
-        if response.lower() != "y":
-            logger.info("Operation cancelled by user")
-            return
-
-        logger.info("Cleaning existing processed data...")
-        shutil.rmtree(path.PROCESSED_DATA)
-        logger.info("Old processed data removed successfully")
-    path.PROCESSED_DATA.mkdir(parents=True, exist_ok=True)
-
-    datasets_paths = [f for f in path.RAW_DATA.iterdir() if f.is_dir()]
-    datasets_names = [f.name for f in datasets_paths]
-    if not datasets_names:
-        error_msg = "Raw data directory does not contain any dataset folders."
-        logger.exception(error_msg)
-        raise ValueError(error_msg)
-    elif len(datasets_names) == 1:
-        msg = f"Dataset name: {datasets_names[0]}"
-    else:
-        msg = "The multi-dataset contains: " + ", ".join(datasets_names) + "."
-    logger.info(msg)
-
+def build_processed_dataset(config: BinarySegmentationDatasetConfig, logger: logging.Logger | None = None):
     try:
+        if logger is None:
+            logger = get_null_logger()
+
+        logger.info("=" * 60)
+        logger.info("BUILDING PROCESSED DATASET")
+        logger.info("=" * 60)
+
+        path = ProjectPaths()
+        logger.info("Raw data path: %s", path.RAW_DATA)
+        logger.info("Processed data path: %s", path.PROCESSED_DATA)
+
+        if not path.RAW_DATA.exists():
+            raise ValueError(f"Raw data not found at: {path.RAW_DATA}")
+
+        if path.PROCESSED_DATA.exists():
+            logger.warning("Processed directory already exists: %s", path.PROCESSED_DATA)
+            logger.info("Interactive mode: asking user for confirmation")
+            response = input("Delete and recreate? (y/n): ").strip().lower()
+
+            if response.lower() != "y":
+                logger.info("Operation cancelled by user")
+                return
+
+            logger.info("Cleaning existing processed data...")
+            shutil.rmtree(path.PROCESSED_DATA)
+            logger.info("Old processed data removed successfully")
+        path.PROCESSED_DATA.mkdir(parents=True, exist_ok=True)
+
+        datasets_paths = [f for f in path.RAW_DATA.iterdir() if f.is_dir()]
+        datasets_names = [f.name for f in datasets_paths]
+
+        if not datasets_names:
+            raise ValueError("Raw data directory does not contain any dataset folders.")
+        elif len(datasets_names) == 1:
+            msg = f"Dataset name: {datasets_names[0]}"
+        else:
+            msg = "The multi-dataset contains: " + ", ".join(datasets_names) + "."
+        logger.info(msg)
+
         logger.info("Data structure recognition...")
         datasets = {}
         for dataset_path in datasets_paths:
@@ -178,6 +166,7 @@ def build_processed_dataset(config: Dict, logger: Optional[logging.Logger] = Non
                     f"image dirs vs {len(mask_dirs)} mask dirs. "
                     f"Will pair only the first {min(len(image_dirs), len(mask_dirs))}."
                 )
+
             datasets[dataset_path.name] = []
             used_masks = set()
             for image_path in image_dirs:
@@ -197,6 +186,7 @@ def build_processed_dataset(config: Dict, logger: Optional[logging.Logger] = Non
                                 break
                         else:
                             logger.debug(f"Skipped pair: {image_path.name} + {mask_path.name} (no common files)")
+
             if not datasets[dataset_path.name]:
                 logger.warning(
                     "No file pairs were built for dataset %s. Check directory structure and file names.",
@@ -205,8 +195,11 @@ def build_processed_dataset(config: Dict, logger: Optional[logging.Logger] = Non
 
         for name, pairs in datasets.items():
             logger.debug("%s contains %d pairs", name, len(pairs))
+
         data_paths_lst = [
-            (image_path, mask_path, source) for source, pair in datasets.items() for image_path, mask_path in pair
+            (image_path, mask_path, source)
+            for source, pair in datasets.items()
+            for image_path, mask_path in pair
         ]
 
         logger.info("Splitting dataset into train/test/val...")
@@ -253,7 +246,6 @@ def build_processed_dataset(config: Dict, logger: Optional[logging.Logger] = Non
 
 if __name__ == "__main__":
     path = ProjectPaths()
-    with open(path.CONFIG) as f:
-        config = yaml.safe_load(f)
-    data_logger = get_logger("data", config["logging"])
-    build_processed_dataset(config=config, logger=data_logger)
+    dataset_config = load_dataset_config(path.DATASET_CONFIG)
+    data_logger = get_logger("data")
+    build_processed_dataset(config=dataset_config, logger=data_logger)
