@@ -1,7 +1,6 @@
 import json
 import logging
 import shutil
-import yaml
 from PIL import Image
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
@@ -9,7 +8,7 @@ from pathlib import Path
 from typing import Callable
 from paths.project_paths import ProjectPaths
 from src.utils.logger_setup import get_logger, get_null_logger
-from src.configs.schemas.dataset.dataset import BinarySegmentationDatasetConfig
+from src.configs.schemas.dataset.dataset import DatasetConfig
 from src.configs.loader import load_dataset_config
 
 
@@ -114,7 +113,7 @@ def _save_manifest(data: list[tuple[Path, Path, str]], filepath: Path, logger: l
         json.dump(manifest, f, indent=2, ensure_ascii=False)
 
 
-def build_processed_dataset(config: BinarySegmentationDatasetConfig, logger: logging.Logger | None = None):
+def build_processed_dataset(config: DatasetConfig, logger: logging.Logger | None = None):
     try:
         if logger is None:
             logger = get_null_logger()

@@ -1,3 +1,5 @@
+use_cuda: true
+
 metrics:
   - name: "iou"
     task: "binary"

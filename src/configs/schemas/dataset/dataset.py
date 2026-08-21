@@ -4,7 +4,7 @@ from src.configs.schemas.dataset.resizes import ResizesConfig
 from src.configs.schemas.dataset.weights import DatasetWeightsConfig
 
 
-class BinarySegmentationDatasetConfig(BaseModel):
+class DatasetConfig(BaseModel):
     max_area: int = Field(gt=0)
     splits: SplitsConfig
     resizes: ResizesConfig

@@ -3,11 +3,11 @@ from pathlib import Path
 from paths.project_paths import ProjectPaths
 from src.data.BinarySegmentationDataset import BinarySegmentationDataset
 from src.data.transforms import get_train_transforms, get_val_test_transforms
-from src.configs.schemas.dataset.dataset import BinarySegmentationDatasetConfig
+from src.configs.schemas.dataset.dataset import DatasetConfig
 
 
 def create_dataset(
-    config: BinarySegmentationDatasetConfig,
+    config: DatasetConfig,
     mode: str,
     json_path: ProjectPaths | str | Path | None = None,
     manifest: list[dict] | None = None,
@@ -46,7 +46,7 @@ def create_dataset(
 
 
 def create_train_dataset(
-    config: BinarySegmentationDatasetConfig,
+    config: DatasetConfig,
     json_path: ProjectPaths | str | Path | None = None,
     manifest: list[dict] | None = None,
 ) -> BinarySegmentationDataset:
@@ -54,7 +54,7 @@ def create_train_dataset(
 
 
 def create_test_dataset(
-    config: BinarySegmentationDatasetConfig,
+    config: DatasetConfig,
     json_path: ProjectPaths | str | Path | None = None,
     manifest: list[dict] | None = None,
 ) -> BinarySegmentationDataset:
@@ -62,7 +62,7 @@ def create_test_dataset(
 
 
 def create_val_dataset(
-    config: BinarySegmentationDatasetConfig,
+    config: DatasetConfig,
     json_path: ProjectPaths | str | Path | None = None,
     manifest: list[dict] | None = None,
 ) -> BinarySegmentationDataset:

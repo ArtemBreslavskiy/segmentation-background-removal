@@ -4,6 +4,7 @@ import src.configs.schemas.evaluating.metric as metric
 
 
 class EvaluatingConfig(BaseModel):
+    use_cuda: bool
     metrics: list[Union[
         metric.IOUConfig,
         metric.AccuracyConfig,

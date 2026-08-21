@@ -16,17 +16,25 @@ default:
     backup_count: 5
 
 types:
-  agent:
-    name: "agent_logger"
-    filename_pattern: "agents.log"
+  data:
+    name: "data"
+    filename_pattern: "data.log"
     console:
       level: "INFO"
     file:
       level: "DEBUG"
 
-  pipeline:
-    name: "pipeline_logger"
-    filename_pattern: "pipeline.log"
+  learning:
+    name: "learning"
+    filename_pattern: "learning.log"
+    console:
+      level: "INFO"
+    file:
+      level: "DEBUG"
+
+  evaluating:
+    name: "evaluating"
+    filename_pattern: "evaluating.log"
     console:
       level: "INFO"
     file:

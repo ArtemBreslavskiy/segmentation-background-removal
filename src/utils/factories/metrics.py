@@ -1,7 +1,9 @@
+import torchmetrics
+
 from src.configs.schemas.evaluating.evaluating import EvaluatingConfig
 
 
-def create_metrics(config: EvaluatingConfig) -> dict[str, ]:
+def create_metrics(config: EvaluatingConfig) -> dict[str, torchmetrics.Metric]:
     metrics = {}
     for metric in config.metrics:
         if config.name == "iou":

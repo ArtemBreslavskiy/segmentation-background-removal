@@ -10,17 +10,17 @@ from src.utils.factories.batch_sampler import create_batch_sampler
 from src.utils.factories.metrics import create_metrics
 from src.utils.sampler_utils import get_padding_fn
 from src.configs.schemas.model.model import ModelConfig
-from src.configs.schemas.evaluating.evaluating import EvaluatingConfig
-from src.configs.schemas.dataset.dataset import BinarySegmentationDatasetConfig
+from src.configs.schemas.dataset.dataset import DatasetConfig
 from src.configs.schemas.dataloader.dataloader import DataloaderConfig
-from src.configs.loader import load_model_config, load_evaluating_config, load_dataset_config, load_dataloader_config
+from src.configs.schemas.evaluating.evaluating import EvaluatingConfig
+from src.configs.loader import load_model_config, load_dataset_config, load_dataloader_config, load_evaluating_config
 
 
 def evaluate(
     model_config: ModelConfig,
-    evaluating_config: EvaluatingConfig,
-    dataset_config: BinarySegmentationDatasetConfig,
+    dataset_config: DatasetConfig,
     dataloader_config: DataloaderConfig,
+    evaluating_config: EvaluatingConfig,
     logger: logging.Logger | None = None
 ):
     try:
@@ -62,11 +62,11 @@ def evaluate(
         logger.info("Starting evaluation on test dataset...")
         collate_fn = get_padding_fn(dataloader_config.pad_collate)
         test_dataset = create_test_dataset(manifest=test_manifest, config=dataset_config)
-        batch_sampler = create_batch_sampler(config=dataloader_config.samplers.test, dataset=test_dataset)
+        test_sampler = create_batch_sampler(config=dataloader_config.samplers.test, dataset=test_dataset)
         test_loader = create_test_dataloader(
             config=dataloader_config,
             dataset=test_dataset,
-            batch_sampler=batch_sampler,
+            batch_sampler=test_sampler,
             collate_fn=collate_fn
         )
         logger.info("Test dataloader created")
@@ -93,14 +93,14 @@ def evaluate(
 if __name__ == "__main__":
     path = ProjectPaths()
     model_conf = load_model_config(path.MODEL_CONFIG)
-    evaluating_conf = load_evaluating_config(path.EVALUATING_CONFIG)
     dataset_conf = load_dataset_config(path.DATASET_CONFIG)
     dataloader_conf = load_dataloader_config(path.DATALOADER_CONFIG)
-    evaluate_logger = get_logger("evaluating")
+    evaluating_conf = load_evaluating_config(path.EVALUATING_CONFIG)
+    evaluating_logger = get_logger("evaluating")
     evaluate(
         model_config=model_conf,
-        evaluating_config=evaluating_conf,
         dataset_config=dataset_conf,
         dataloader_config=dataloader_conf,
-        logger=evaluate_logger,
+        evaluating_config=evaluating_conf,
+        logger=evaluating_logger,
     )
