@@ -6,23 +6,22 @@ from typing import Dict, Optional
 import torch
 import yaml
 
-from paths.ProjectPaths import ProjectPaths
+from paths.project_paths import ProjectPaths
 from src.engine.Trainer import Trainer
-from src.logs.logger_setup import configure_loggers, get_logger
+from src.logging.logger_setup import get_logger
 from src.utils.apply_runtime_env import apply_runtime_env
-from src.utils.random_seed_utils import set_random_seed
-from src.utils.factories.dataloader_factory import (
+from src.utils.seed_utils import set_random_seed
+from src.utils.factories.dataloader import (
     create_train_dataloader_with_weighted_dynamic_bucket_batch_sampler,
     create_val_dataloader_with_weighted_dynamic_bucket_batch_sampler,
 )
-from src.utils.factories.dataset_factory import create_train_dataset, create_val_dataset
-from src.utils.factories.loss_fn_factory import create_loss
-from src.utils.factories.metrics_factory import create_metrics
-from src.utils.factories.model_factory import create_model
-from src.utils.factories.optimizer_factory import create_optimizer
-from src.utils.factories.scheduler_factory import create_scheduler
-from src.utils.sleep_utils import allow_sleep, prevent_sleep
-from src.utils.weighted_dynamic_bucket_batch_sampler_utils import get_padding_fn
+from src.utils.factories.dataset import create_train_dataset, create_val_dataset
+from src.utils.factories.loss_fn import create_loss
+from src.utils.factories.metrics import create_metrics
+from src.utils.factories.model import create_model
+from src.utils.factories.optimizer import create_optimizer
+from src.utils.factories.scheduler import create_scheduler
+from src.utils.sampler_utils import get_padding_fn
 
 
 def train(config: Dict, logger: Optional[logging.Logger] = None):
@@ -44,7 +43,7 @@ def train(config: Dict, logger: Optional[logging.Logger] = None):
     logger.debug("Manifest loaded successfully")
 
     model_name = config["model"]["model_name"]
-    log_dir = path.SAVED_CHECKPOINTS
+    log_dir = path.SAVED_MODELS
     device = "cuda" if config["learning"]["use_cuda"] and torch.cuda.is_available() else "cpu"
     logger.info("Using device: %s", device)
     if device == "cuda":
@@ -122,6 +121,7 @@ def train(config: Dict, logger: Optional[logging.Logger] = None):
                 path=saved_path,
                 load_optimizer=True,
                 load_scheduler=True,
+                logger=logger,
             )
             logger.info("Checkpoint loaded successfully")
             logger.info("Resuming from epoch: %d", trainer.current_epoch)
@@ -136,8 +136,6 @@ def train(config: Dict, logger: Optional[logging.Logger] = None):
         resume_batches = trainer.current_batch_in_epoch
     else:
         resume_batches = 0
-
-    prevent_sleep(logger)
 
     logger.info("=" * 60)
     logger.info("STARTING TRAINING LOOP")
@@ -159,7 +157,6 @@ def train(config: Dict, logger: Optional[logging.Logger] = None):
             mode=config["learning"]["mode"],
             early_stopping_patience=config["learning"]["early_stopping_patience"],
             log_interval=config["learning"]["log_interval"],
-            tqdm_mode="no_len",
         )
 
     except KeyboardInterrupt:
@@ -174,18 +171,12 @@ def train(config: Dict, logger: Optional[logging.Logger] = None):
         trainer.save_checkpoint(is_best=False)
         raise
 
-    finally:
-        allow_sleep(logger)
-
 
 if __name__ == "__main__":
     path = ProjectPaths()
     with open(path.CONFIG) as f:
         config = yaml.safe_load(f)
-
-    configure_loggers(path.CONFIG, path.LOGS)
-    train_logger = get_logger(config["logs"]["types"]["train"]["name"])
-
+    train_logger = get_logger("train", config["logging"])
     train(config=config, logger=train_logger)
     try:
         torch.multiprocessing.set_start_method("spawn", force=True)

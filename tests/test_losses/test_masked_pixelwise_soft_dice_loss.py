@@ -1,12 +1,12 @@
 import pytest
 import torch
 
-from src.losses.MaskedPixelwiseSoftDiceLoss import MaskedPixelwiseSoftDiceLoss
+from src.losses.MaskedSoftDiceLoss import MaskedSoftDiceLoss
 
 
 class TestMaskedPixelwiseSoftDiceLoss:
     def test_loss_returns_float(self):
-        loss_function = MaskedPixelwiseSoftDiceLoss(smooth=1.0)
+        loss_function = MaskedSoftDiceLoss(smooth=1.0)
 
         pred = torch.randn(2, 1, 64, 64)
         target = torch.randint(0, 2, (2, 1, 64, 64)).float()
@@ -18,7 +18,7 @@ class TestMaskedPixelwiseSoftDiceLoss:
         assert loss.item() >= 0
 
     def test_loss_perfect_match(self):
-        loss_function = MaskedPixelwiseSoftDiceLoss(smooth=1.0)
+        loss_function = MaskedSoftDiceLoss(smooth=1.0)
 
         pred_ones = torch.ones(2, 1, 64, 64) * 100
         target_ones = torch.ones(2, 1, 64, 64).float()
@@ -33,7 +33,7 @@ class TestMaskedPixelwiseSoftDiceLoss:
         assert loss_zero.item() == pytest.approx(0.0, abs=1e-3)
 
     def test_loss_perfect_mismatch(self):
-        loss_function = MaskedPixelwiseSoftDiceLoss(smooth=1.0)
+        loss_function = MaskedSoftDiceLoss(smooth=1.0)
 
         pred_ones = torch.ones(2, 1, 64, 64) * 100
         target_zeros = torch.zeros(2, 1, 64, 64).float()
@@ -48,7 +48,7 @@ class TestMaskedPixelwiseSoftDiceLoss:
         assert loss_mismatch_2.item() == pytest.approx(1.0, abs=1e-3)
 
     def test_loss_gradients(self):
-        loss_function = MaskedPixelwiseSoftDiceLoss(smooth=1.0)
+        loss_function = MaskedSoftDiceLoss(smooth=1.0)
 
         pred = torch.randn(2, 1, 64, 64, requires_grad=True)
         target = torch.randint(0, 2, (2, 1, 64, 64)).float()
@@ -62,7 +62,7 @@ class TestMaskedPixelwiseSoftDiceLoss:
 
     @pytest.mark.parametrize("batch_size", list(range(1, 33)))
     def test_loss_different_batch_sizes(self, batch_size):
-        loss_function = MaskedPixelwiseSoftDiceLoss(smooth=1.0)
+        loss_function = MaskedSoftDiceLoss(smooth=1.0)
 
         pred = torch.randn(batch_size, 1, 64, 64)
         target = torch.randint(0, 2, (batch_size, 1, 64, 64)).float()
@@ -76,7 +76,7 @@ class TestMaskedPixelwiseSoftDiceLoss:
         [(i, j) for i in range(32, 513, 32) for j in range(32, 513, 32)],
     )
     def test_loss_different_resolutions(self, height, width):
-        loss_function = MaskedPixelwiseSoftDiceLoss(smooth=1.0)
+        loss_function = MaskedSoftDiceLoss(smooth=1.0)
 
         pred = torch.randn(2, 1, height, width)
         target = torch.randint(0, 2, (2, 1, height, width)).float()
@@ -88,7 +88,7 @@ class TestMaskedPixelwiseSoftDiceLoss:
 
     @pytest.mark.parametrize("smooth", list(range(0, 101)))
     def test_loss_different_smooth(self, smooth):
-        loss_function = MaskedPixelwiseSoftDiceLoss(smooth=smooth)
+        loss_function = MaskedSoftDiceLoss(smooth=smooth)
 
         pred_ones = torch.ones(2, 1, 64, 64) * 100
         target_ones = torch.ones(2, 1, 64, 64).float()
@@ -101,7 +101,7 @@ class TestMaskedPixelwiseSoftDiceLoss:
         assert loss_ones.item() > 0.9
 
     def test_loss_extreme_value(self):
-        loss_function = MaskedPixelwiseSoftDiceLoss(smooth=1e-6)
+        loss_function = MaskedSoftDiceLoss(smooth=1e-6)
 
         pred_big = torch.ones(2, 1, 64, 64) * 1e6
         pred_small = torch.ones(2, 1, 64, 64) * 1e-6
@@ -125,7 +125,7 @@ class TestMaskedPixelwiseSoftDiceLoss:
         assert 0 <= loss_one_2.item() <= 1
 
     def test_loss_monotonic(self):
-        loss_function = MaskedPixelwiseSoftDiceLoss(smooth=1.0)
+        loss_function = MaskedSoftDiceLoss(smooth=1.0)
 
         preds = [torch.ones(2, 1, 64, 64) * v for v in range(-100, 101)]
         target_ones = torch.ones(2, 1, 64, 64).float()
@@ -135,7 +135,7 @@ class TestMaskedPixelwiseSoftDiceLoss:
             assert losses[i] <= losses[i - 1] + 1e-5
 
     def test_loss_reproducibility(self):
-        loss_function = MaskedPixelwiseSoftDiceLoss(smooth=1.0)
+        loss_function = MaskedSoftDiceLoss(smooth=1.0)
 
         torch.manual_seed(42)
         pred = torch.randn(2, 1, 64, 64)
@@ -147,7 +147,7 @@ class TestMaskedPixelwiseSoftDiceLoss:
         assert loss1.item() == pytest.approx(loss2.item(), abs=1e-10)
 
     def test_loss_returns_float_with_valid_mask(self):
-        loss_function = MaskedPixelwiseSoftDiceLoss(smooth=1.0)
+        loss_function = MaskedSoftDiceLoss(smooth=1.0)
 
         pred = torch.randn(2, 1, 64, 64)
         target = torch.randint(0, 2, (2, 1, 64, 64)).float()
@@ -161,7 +161,7 @@ class TestMaskedPixelwiseSoftDiceLoss:
         assert loss.item() >= 0
 
     def test_loss_perfect_match_with_valid_mask(self):
-        loss_function = MaskedPixelwiseSoftDiceLoss(smooth=1.0)
+        loss_function = MaskedSoftDiceLoss(smooth=1.0)
 
         pred_ones = torch.ones(2, 1, 64, 64) * 100
         target_ones = torch.ones(2, 1, 64, 64).float()
@@ -179,7 +179,7 @@ class TestMaskedPixelwiseSoftDiceLoss:
         assert loss_zero.item() == pytest.approx(0.0, abs=1e-3)
 
     def test_loss_perfect_mismatch_with_valid_mask(self):
-        loss_function = MaskedPixelwiseSoftDiceLoss(smooth=1.0)
+        loss_function = MaskedSoftDiceLoss(smooth=1.0)
 
         pred_ones = torch.ones(2, 1, 64, 64) * 100
         target_zeros = torch.zeros(2, 1, 64, 64).float()
@@ -197,7 +197,7 @@ class TestMaskedPixelwiseSoftDiceLoss:
         assert loss_mismatch_2.item() == pytest.approx(1.0, abs=1e-3)
 
     def test_loss_gradients_with_valid_mask(self):
-        loss_function = MaskedPixelwiseSoftDiceLoss(smooth=1.0)
+        loss_function = MaskedSoftDiceLoss(smooth=1.0)
 
         pred = torch.randn(2, 1, 64, 64, requires_grad=True)
         target = torch.randint(0, 2, (2, 1, 64, 64)).float()
@@ -213,7 +213,7 @@ class TestMaskedPixelwiseSoftDiceLoss:
 
     @pytest.mark.parametrize("batch_size", list(range(1, 33)))
     def test_loss_different_batch_sizes_with_valid_mask(self, batch_size):
-        loss_function = MaskedPixelwiseSoftDiceLoss(smooth=1.0)
+        loss_function = MaskedSoftDiceLoss(smooth=1.0)
 
         pred = torch.randn(batch_size, 1, 64, 64)
         target = torch.randint(0, 2, (batch_size, 1, 64, 64)).float()
@@ -229,7 +229,7 @@ class TestMaskedPixelwiseSoftDiceLoss:
         [(i, j) for i in range(32, 513, 32) for j in range(32, 513, 32)],
     )
     def test_loss_different_resolutions_with_valid_mask(self, height, width):
-        loss_function = MaskedPixelwiseSoftDiceLoss(smooth=1.0)
+        loss_function = MaskedSoftDiceLoss(smooth=1.0)
 
         pred = torch.randn(2, 1, height, width)
         target = torch.randint(0, 2, (2, 1, height, width)).float()
@@ -243,7 +243,7 @@ class TestMaskedPixelwiseSoftDiceLoss:
 
     @pytest.mark.parametrize("smooth", list(range(0, 101)))
     def test_loss_different_smooth_with_valid_mask(self, smooth):
-        loss_function = MaskedPixelwiseSoftDiceLoss(smooth=smooth)
+        loss_function = MaskedSoftDiceLoss(smooth=smooth)
 
         pred_ones = torch.ones(2, 1, 64, 64) * 100
         target_ones = torch.ones(2, 1, 64, 64).float()
@@ -259,7 +259,7 @@ class TestMaskedPixelwiseSoftDiceLoss:
         assert loss_ones.item() > 0.9
 
     def test_loss_extreme_value_with_valid_mask(self):
-        loss_function = MaskedPixelwiseSoftDiceLoss(smooth=1e-6)
+        loss_function = MaskedSoftDiceLoss(smooth=1e-6)
 
         pred_big = torch.ones(2, 1, 64, 64) * 1e6
         pred_small = torch.ones(2, 1, 64, 64) * 1e-6
@@ -286,7 +286,7 @@ class TestMaskedPixelwiseSoftDiceLoss:
         assert 0 <= loss_one_2.item() <= 1
 
     def test_loss_monotonic_with_valid_mask(self):
-        loss_function = MaskedPixelwiseSoftDiceLoss(smooth=1.0)
+        loss_function = MaskedSoftDiceLoss(smooth=1.0)
 
         preds = [torch.ones(2, 1, 64, 64) * v for v in range(-100, 101)]
         target_ones = torch.ones(2, 1, 64, 64).float()
@@ -298,7 +298,7 @@ class TestMaskedPixelwiseSoftDiceLoss:
             assert losses[i] <= losses[i - 1] + 1e-5
 
     def test_loss_reproducibility_with_valid_mask(self):
-        loss_function = MaskedPixelwiseSoftDiceLoss(smooth=1.0)
+        loss_function = MaskedSoftDiceLoss(smooth=1.0)
 
         torch.manual_seed(42)
         pred = torch.randn(2, 1, 64, 64)

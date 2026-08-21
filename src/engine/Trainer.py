@@ -9,11 +9,11 @@ from datetime import datetime
 from pathlib import Path
 from src.engine.BaseModule import BaseModule
 from src.losses.ComboLoss import ComboLoss
-from src.utils.factories.loss_fn_factory import create_loss
-from src.utils.factories.metrics_factory import create_metrics
-from src.utils.factories.model_factory import create_model
-from src.utils.factories.optimizer_factory import create_optimizer
-from src.utils.factories.scheduler_factory import create_scheduler
+from src.utils.factories.loss_fn import create_loss
+from src.utils.factories.metrics import create_metrics
+from src.utils.factories.model import create_model
+from src.utils.factories.optimizer import create_optimizer
+from src.utils.factories.scheduler import create_scheduler
 from src.configs.schemas.model.model import ModelConfig
 from src.configs.schemas.learning.learning import LearningConfig
 from src.configs.schemas.evaluating.evaluating import EvaluatingConfig

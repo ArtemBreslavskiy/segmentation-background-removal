@@ -37,7 +37,7 @@ class TestTester:
         for p_loaded, p_orig in zip(trainer.model.parameters(), dummy_trainer.model.parameters()):
             assert torch.equal(p_loaded, p_orig)
 
-    @pytest.mark.parametrize("config", [None, {}])
+    @pytest.mark.parametrize("configs", [None, {}])
     def test_load_tester_without_config_in_checkpoint(self, dummy_trainer, config, dummy_logger, tmp_path, caplog):
         trainer = dummy_trainer
         trainer.config = config
@@ -46,5 +46,5 @@ class TestTester:
         log_dir = tmp_path / "test_dir"
         best_path = log_dir / f"{trainer.model_name}_best.pt"
 
-        with pytest.raises(ValueError, match="Checkpoint does not contain config. Cannot restore components."):
+        with pytest.raises(ValueError, match="Checkpoint does not contain configs. Cannot restore components."):
             Tester.load_tester(best_path, log_dir, logger=dummy_logger)

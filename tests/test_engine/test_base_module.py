@@ -173,7 +173,7 @@ class TestBaseModule:
     def test_init_without_config(self, caplog, dummy_model, dummy_loss_function, tmp_path, dummy_logger):
         log_dir = tmp_path / "test_dir"
 
-        with pytest.raises(ValueError, match="config cannot be none"):
+        with pytest.raises(ValueError, match="configs cannot be none"):
             BaseModule(
                 model=dummy_model,
                 config=None,
@@ -182,15 +182,15 @@ class TestBaseModule:
                 device="cpu",
                 logger=dummy_logger,
             )
-        assert any(rec.levelname == "ERROR" and "config cannot be none" in rec.message for rec in caplog.records)
+        assert any(rec.levelname == "ERROR" and "configs cannot be none" in rec.message for rec in caplog.records)
 
-    @pytest.mark.parametrize("config", [10, 0.5, "test"])
+    @pytest.mark.parametrize("configs", [10, 0.5, "test"])
     def test_init_with_unsupported_config_type(
         self, caplog, dummy_model, dummy_loss_function, tmp_path, dummy_logger, config
     ):
         log_dir = tmp_path / "test_dir"
 
-        with pytest.raises(ValueError, match="Unsupported config type"):
+        with pytest.raises(ValueError, match="Unsupported configs type"):
             BaseModule(
                 model=dummy_model,
                 config=config,
@@ -199,7 +199,7 @@ class TestBaseModule:
                 device="cpu",
                 logger=dummy_logger,
             )
-        assert any(rec.levelname == "ERROR" and "Unsupported config type" in rec.message for rec in caplog.records)
+        assert any(rec.levelname == "ERROR" and "Unsupported configs type" in rec.message for rec in caplog.records)
 
     @pytest.mark.parametrize("device", [10, 0.5, "test"])
     def test_init_with_invalid_device(

@@ -9,8 +9,8 @@ from PIL import Image
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
-from paths.ProjectPaths import ProjectPaths
-from src.logs.logger_setup import configure_loggers, get_logger
+from paths.project_paths import ProjectPaths
+from src.logging.logger_setup import get_logger
 
 
 def _search_correct_directories(path: Path, criteria: Callable[[Path], bool]) -> List[Path]:
@@ -43,7 +43,6 @@ def _mask_directory_criteria(path: Path) -> bool:
         "labels",
         "class",
         "classes",
-        "object",
         "gt",
         "groundtruth",
         "ground_truth",
@@ -256,8 +255,5 @@ if __name__ == "__main__":
     path = ProjectPaths()
     with open(path.CONFIG) as f:
         config = yaml.safe_load(f)
-
-    configure_loggers(path.CONFIG, path.LOGS)
-    data_logger = get_logger(config["logs"]["types"]["data"]["name"])
-
+    data_logger = get_logger("data", config["logging"])
     build_processed_dataset(config=config, logger=data_logger)

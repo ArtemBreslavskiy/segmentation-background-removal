@@ -1,5 +1,6 @@
 use_cuda: true
 use_fp16: true
+max_clip_grad_norm: 1.0
 threshold: 0.5
 
 epochs: 250
@@ -13,20 +14,19 @@ compile_dynamic: false
 compile_options: "reduce-overhead"
 
 accumulation_steps: 8
-use_pixels_accumulation: false
 pixels_per_step: 0
 
 loss:
-  type: "combo_loss"
+  type: "combo"
   weights: [ 0.2, 0.8 ]
   loss_functions:
-    - type: "masked_focal_loss"
+    - type: "masked_focal"
       alpha: 0.5
       gamma: 2.5
       reduction: "mean"
       smooth: 1e-6
 
-    - type: "masked_tversky_loss"
+    - type: "masked_tversky"
       alpha: 0.9
       beta: 0.1
       smooth: 1e-6

@@ -1,4 +1,3 @@
-type: "binary_segmentation"
 max_area: 262144
 
 splits:

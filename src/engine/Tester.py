@@ -6,9 +6,9 @@ import torchmetrics
 from datetime import datetime
 from pathlib import Path
 from src.engine.BaseModule import BaseModule
-from src.utils.factories.loss_fn_factory import create_loss
-from src.utils.factories.metrics_factory import create_metrics
-from src.utils.factories.model_factory import create_model
+from src.utils.factories.loss_fn import create_loss
+from src.utils.factories.metrics import create_metrics
+from src.utils.factories.model import create_model
 from src.configs.schemas.model.model import ModelConfig
 from src.configs.schemas.learning.learning import LearningConfig
 

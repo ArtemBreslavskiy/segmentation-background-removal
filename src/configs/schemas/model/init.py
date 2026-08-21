@@ -8,7 +8,7 @@ class BaseModelInitConfig(BaseModel):
 
 
 class DeepLabV3PlusConfig(BaseModelInitConfig):
-    type: Literal["DeepLabV3Plus"]
+    type: Literal["deeplab_v3_plus"]
     encoder_name: str
     num_classes: int = Field(gt=0)
     pretrained: bool = True
@@ -20,7 +20,7 @@ class DeepLabV3PlusConfig(BaseModelInitConfig):
 
 
 class SegFormerConfig(BaseModelInitConfig):
-    type: Literal["SegFormer"]
+    type: Literal["seg_former"]
     encoder_name: str
     num_classes: int = Field(gt=0)
     pretrained: bool = True
