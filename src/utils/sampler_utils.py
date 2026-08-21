@@ -1,22 +1,23 @@
 from functools import partial
 from src.data.pad_collate import pad_collate
+from src.configs.schemas.dataloader.pad_collate import PadCollateConfig
 
 
-def get_area_and_aspect_ratio(h: int, w: int):
+def get_area_and_aspect_ratio(h: int, w: int) -> tuple[int, float]:
     return h * w, h / w
 
 
-def get_sample_weight(dataset_weights: dict[str, int], source: str):
+def get_sample_weight(dataset_weights: dict[str, int], source: str) -> float:
     return dataset_weights.get(source, 0)
 
 
-def get_padding_fn(config: dict):
-    if config["dataloader"]["pad_collate"]["enabled"]:
+def get_padding_fn(config: PadCollateConfig) -> partial | None:
+    if config.enabled:
         collate_fn = partial(
             pad_collate,
-            alignment=config["dataloader"]["pad_collate"]["alignment"],
-            pad_value=config["dataloader"]["pad_collate"]["pad_value"],
-            mode=config["dataloader"]["pad_collate"]["mode"],
+            alignment=config.alignment,
+            pad_value=config.pad_value,
+            mode=config.mode,
         )
     else:
         collate_fn = None
