@@ -202,9 +202,9 @@ def build_processed_dataset(config: DatasetConfig, logger: logging.Logger | None
         ]
 
         logger.info("Splitting dataset into train/test/val...")
-        random_seed = config["dataset"]["splits"]["seed"]
-        test_ratio = config["dataset"]["splits"]["ratios"]["test"]
-        val_ratio = config["dataset"]["splits"]["ratios"]["val"]
+        random_seed = config.splits.seed
+        test_ratio = config.splits.test_ratio
+        val_ratio = config.splits.val_ratio
         test_val_ratio = test_ratio + val_ratio
 
         sources = [s for _, _, s in data_paths_lst]

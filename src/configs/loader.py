@@ -1,7 +1,7 @@
 import yaml
 from pathlib import Path
 from src.configs.schemas.model.model import ModelConfig
-from src.configs.schemas.dataset.dataset import BaseDatasetConfig
+from src.configs.schemas.dataset.dataset import DatasetConfig
 from src.configs.schemas.dataloader.dataloader import DataloaderConfig
 from src.configs.schemas.learning.learning import LearningConfig
 from src.configs.schemas.runtime.runtime import RuntimeConfig
@@ -15,10 +15,10 @@ def load_model_config(path: str | Path) -> ModelConfig:
     return ModelConfig(**raw)
 
 
-def load_dataset_config(path: str | Path) -> BaseDatasetConfig:
+def load_dataset_config(path: str | Path) -> DatasetConfig:
     with open(path, "r", encoding="utf-8") as f:
         raw = yaml.safe_load(f)
-    return BaseDatasetConfig(**raw)
+    return DatasetConfig(**raw)
 
 
 def load_dataloader_config(path: str | Path) -> DataloaderConfig:

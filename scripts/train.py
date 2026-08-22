@@ -58,6 +58,8 @@ def train(
         model_name = model_config.model_name
         log_dir = path.SAVED_MODELS
         device = "cuda" if learning_config.use_cuda and torch.cuda.is_available() else "cpu"
+        if learning_config.use_cuda and not torch.cuda.is_available():
+            logger.warning("use_cuda=True but CUDA is not available, falling back to CPU")
         logger.info("Using device: %s", device)
         if device == "cuda":
             logger.info("GPU: %s", torch.cuda.get_device_name(0))

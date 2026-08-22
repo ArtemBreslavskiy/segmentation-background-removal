@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import Literal
 
 
@@ -15,3 +15,13 @@ class WeightedDynamicBucketBatchSamplerConfig(BaseSamplerConfig):
     replacement: bool
     skip_overload_examples: bool
     send_overload_report: bool
+    weights: dict[str, float] = Field(default_factory=dict)
+
+    @field_validator("weights")
+    def validate_weights(cls, v: dict[str, float]) -> dict[str, float]:
+        if v is None:
+            return {}
+        for name, weight in v.items():
+            if weight <= 0:
+                raise ValueError(f"Weight for '{name}' must be > 0, got {weight}")
+        return v

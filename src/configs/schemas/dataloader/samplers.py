@@ -3,7 +3,7 @@ from typing import Union
 import src.configs.schemas.dataloader.sampler as sampler
 
 
-class SamplersConfig:
+class SamplersConfig(BaseModel):
     train: Union[sampler.WeightedDynamicBucketBatchSamplerConfig] = Field(description="type")
     test: Union[sampler.WeightedDynamicBucketBatchSamplerConfig] = Field(description="type")
     val: Union[sampler.WeightedDynamicBucketBatchSamplerConfig] = Field(description="type")

@@ -12,7 +12,7 @@ def create_batch_sampler(config: BaseSamplerConfig, dataset: BinarySegmentationD
         dataset_areas = []
         dataset_aspect_ratios = []
         for item in manifest:
-            weights.append(get_sample_weight(config["dataset"]["weights"], item["source"]))
+            weights.append(get_sample_weight(config.weights, item["source"]))
             h, w = item["resolution"]
             area, aspect_ratio = get_area_and_aspect_ratio(h, w)
             dataset_areas.append(area)

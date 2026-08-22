@@ -15,7 +15,7 @@ class ProjectPaths:
     EVALUATING_CONFIG: Path = CONFIGS / "evaluating.yaml"
     LOGGING_CONFIG: Path = CONFIGS / "logging.yaml"
 
-    LOGS: Path = ROOT / "logging"
+    LOGS: Path = ROOT / "logs"
 
     SAVED_MODELS: Path = ROOT / "models"
     SAVED_CHECKPOINTS: Path = SAVED_MODELS / "checkpoints"

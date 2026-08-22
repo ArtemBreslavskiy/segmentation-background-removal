@@ -32,7 +32,7 @@ def create_loss(config: BaseLossConfig) -> nn.Module:
         from src.losses.ComboLoss import ComboLoss
         losses = []
         for loss_conf in config.loss_functions:
-            losses.append(loss_conf)
+            losses.append(create_loss(loss_conf))
         loss_params = config.model_dump(exclude={"type", "loss_functions"})
         return ComboLoss(loss_functions=losses, **loss_params)
 

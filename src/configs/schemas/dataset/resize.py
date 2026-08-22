@@ -4,7 +4,7 @@ from typing import Literal
 
 class BaseResizeModeConfig(BaseModel):
     model_config = {"extra": "forbid"}
-    type: str
+    mode: str
 
 
 class DefaultResizeConfig(BaseResizeModeConfig):
@@ -18,11 +18,11 @@ class CropConfig(BaseResizeModeConfig):
 
 class ResizeMixAConfig(BaseResizeModeConfig):
     mode: Literal["mix-a"]
-    threshold: int = Field(gt=0)
+    area_threshold_mix: int = Field(gt=0)
     min_foreground_share: float = Field(0.0, ge=0)
 
 
 class ResizeMixBConfig(BaseResizeModeConfig):
     mode: Literal["mix-b"]
-    threshold: int = Field(gt=0)
+    area_threshold_mix: int = Field(gt=0)
     min_foreground_share: float = Field(0.0, ge=0)

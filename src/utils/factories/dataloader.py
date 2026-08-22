@@ -2,6 +2,7 @@ import random
 import numpy as np
 import torch
 import torch.utils.data as data
+from typing import Callable, Optional
 from src.configs.schemas.dataloader.dataloader import DataloaderConfig
 
 
@@ -16,7 +17,7 @@ def create_dataloader(
     mode: str,
     dataset: data.Dataset,
     batch_sampler: data.BatchSampler | None = None,
-    collate_fn: callable | None = None,
+    collate_fn: Optional[Callable] = None,
 ) -> data.DataLoader:
     mode = mode.lower()
     correct_modes = ["train", "test", "val"]
@@ -55,9 +56,9 @@ def create_dataloader(
             {
                 "num_workers": num_workers,
                 "worker_init_fn": seed_worker,
-                "pin_memory": config.get("dataloader", {}).get("pin_memory", True),
-                "persistent_workers": config.get("dataloader", {}).get("persistent_workers", False),
-                "prefetch_factor": config.get("dataloader", {}).get("prefetch_factor", 2),
+                "pin_memory": config.pin_memory,
+                "persistent_workers": config.persistent_workers,
+                "prefetch_factor": config.prefetch_factor,
             }
         )
 
@@ -68,7 +69,7 @@ def create_train_dataloader(
     config: DataloaderConfig,
     dataset: data.Dataset,
     batch_sampler: data.BatchSampler | None = None,
-    collate_fn: callable | None = None,
+    collate_fn: Optional[Callable] = None,
 ) -> data.DataLoader:
     return create_dataloader(
         config=config,
@@ -83,7 +84,7 @@ def create_test_dataloader(
     config: DataloaderConfig,
     dataset: data.Dataset,
     batch_sampler: data.BatchSampler | None = None,
-    collate_fn: callable | None = None,
+    collate_fn: Optional[Callable] = None,
 ) -> data.DataLoader:
     return create_dataloader(
         config=config,
@@ -98,7 +99,7 @@ def create_val_dataloader(
     config: DataloaderConfig,
     dataset: data.Dataset,
     batch_sampler: data.BatchSampler | None = None,
-    collate_fn: callable | None = None,
+    collate_fn: Optional[Callable] = None,
 ) -> data.DataLoader:
     return create_dataloader(
         config=config,

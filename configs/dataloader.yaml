@@ -24,6 +24,13 @@ samplers:
     skip_overload_examples: true
     send_overload_report: true
 
+    weights:
+      AM-2k: 1.0
+      DIS5K: 1.1
+      DUTS: 0.45
+      P3M-10k: 0.6
+      UHRSD: 0.8
+
   test:
     type: "wdb"
     max_batch_size: 32
@@ -33,6 +40,13 @@ samplers:
     skip_overload_examples: false
     send_overload_report: true
 
+    weights:
+      AM-2k: 1.0
+      DIS5K: 1.1
+      DUTS: 0.45
+      P3M-10k: 0.6
+      UHRSD: 0.8
+
   val:
     type: "wdb"
     max_batch_size: 32
@@ -41,6 +55,13 @@ samplers:
     replacement: false
     skip_overload_examples: false
     send_overload_report: true
+
+    weights:
+      AM-2k: 1.0
+      DIS5K: 1.1
+      DUTS: 0.45
+      P3M-10k: 0.6
+      UHRSD: 0.8
 
 pad_collate:
   enabled: true

@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.utils.data as data
 import torchmetrics
+from typing import Callable
 from pydantic import BaseModel as PydenticBaseModel
 from abc import ABC
 from contextlib import nullcontext

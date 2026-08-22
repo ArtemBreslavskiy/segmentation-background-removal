@@ -1,10 +1,12 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 import albumentations as A
 import albumentations.pytorch as AP
 import cv2
 
 
 class Transforms(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     geometric: A.Compose | None = None
     photometric: A.Compose | None = None
     final_image: A.Compose | None = None
@@ -45,11 +47,11 @@ def get_train_transforms() -> Transforms:
         ])
 
     final_image = A.Compose([A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]), AP.ToTensorV2()])
-    final_mask = AP.ToTensorV2()
+    final_mask = A.Compose([AP.ToTensorV2()])
     return Transforms(geometric=geometric, photometric=photometric, final_image=final_image, final_mask=final_mask)
 
 
 def get_val_test_transforms() -> Transforms:
     final_image = A.Compose([A.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]), AP.ToTensorV2()])
-    final_mask = AP.ToTensorV2()
+    final_mask = A.Compose([AP.ToTensorV2()])
     return Transforms(final_image=final_image, final_mask=final_mask)

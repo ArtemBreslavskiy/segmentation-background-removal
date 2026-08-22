@@ -1,11 +1,11 @@
 from pydantic import BaseModel, Field
-from typing import Union
+from typing import Union, Annotated
 import src.configs.schemas.evaluating.metric as metric
 
 
 class EvaluatingConfig(BaseModel):
     use_cuda: bool
-    metrics: list[Union[
+    metrics: list[Annotated[Union[
         metric.IOUConfig,
         metric.AccuracyConfig,
         metric.PrecisionConfig,
@@ -13,4 +13,4 @@ class EvaluatingConfig(BaseModel):
         metric.F1Config,
         metric.SpecificityConfig,
         metric.MCCConfig,
-    ]] = Field(discriminator="name")
+    ], Field(discriminator="name")]]

@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, model_validator
-from typing import Literal, Union
+from typing import Literal, Union, Annotated
 
 
 class BaseLossConfig(BaseModel):
@@ -25,10 +25,10 @@ class MaskedTverskyLossConfig(BaseLossConfig):
 class ComboLossConfig(BaseLossConfig):
     type: Literal["combo_loss"]
     weights: list[float]
-    loss_functions: list[Union[
-        MaskedFocalLossConfig,
-        MaskedTverskyLossConfig
-    ]] = Field(discriminator="type")
+    loss_functions: list[Annotated[
+        Union[MaskedFocalLossConfig, MaskedTverskyLossConfig],
+        Field(discriminator="type")
+    ]]
 
     @model_validator(mode="after")
     def validate_weights_and_functions(self) -> "ComboLossConfig":

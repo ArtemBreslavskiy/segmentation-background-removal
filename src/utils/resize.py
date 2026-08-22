@@ -31,7 +31,10 @@ def resize_mix_a(image, mask, new_area: int, area_threshold_mixed: int, min_fore
     if area > area_threshold_mixed:
         return resize(image, mask, new_h=new_h, new_w=new_w)
     else:
-        return crop(image, mask, new_h=new_h, new_w=new_w, min_foreground=min_foreground)
+        if new_h <= image.shape[0] and new_w <= image.shape[1]:
+            return crop(image, mask, new_h, new_w, min_foreground=min_foreground)
+        else:
+            return resize(image, mask, new_h, new_w)
 
 
 def resize_mix_b(image, mask, new_area: int, area_threshold_mixed: int, min_foreground: int = 50):
@@ -42,9 +45,15 @@ def resize_mix_b(image, mask, new_area: int, area_threshold_mixed: int, min_fore
     if area > area_threshold_mixed:
         intermediate_h, intermediate_w = get_scale_hw(h=h, w=w, new_area=area_threshold_mixed)
         image, mask = resize(image, mask, new_h=intermediate_h, new_w=intermediate_w)
-        return crop(image, mask, new_h=new_h, new_w=new_w, min_foreground=min_foreground)
+        if new_h <= image.shape[0] and new_w <= image.shape[1]:
+            return crop(image, mask, new_h, new_w, min_foreground=min_foreground)
+        else:
+            return resize(image, mask, new_h, new_w)
     else:
-        return crop(image, mask, new_h=new_h, new_w=new_w, min_foreground=min_foreground)
+        if new_h <= image.shape[0] and new_w <= image.shape[1]:
+            return crop(image, mask, new_h, new_w, min_foreground=min_foreground)
+        else:
+            return resize(image, mask, new_h, new_w)
 
 
 def get_scale_hw(h: int, w: int, new_area: int) -> tuple[int, int]:

@@ -9,6 +9,8 @@ from src.data.transforms import Transforms
 
 class BinarySegmentationDataset(data.Dataset):
     AVAILABLE_RESIZE_MODES = ["resize", "crop", "mix-a", "mix-b"]
+    RESIZE_MODES_WITH_MIN_FOREGROUND_SHARE = ["crop", "mix-a", "mix-b"]
+    RESIZE_MODES_WITH_THRESHOLD = ["mix-a", "mix-b"]
 
     def __init__(
         self,
@@ -23,8 +25,8 @@ class BinarySegmentationDataset(data.Dataset):
         resize_mode = resize_mode.lower()
         self._validate_resize_mode(resize_mode)
         self._validate_max_area(max_area)
-        self._validate_area_threshold_mix(area_threshold_mix, max_area)
-        self._validate_min_foreground_share(min_foreground_share)
+        self._validate_area_threshold_mix(resize_mode, area_threshold_mix, max_area)
+        self._validate_min_foreground_share(resize_mode, min_foreground_share)
 
         if not manifest:
             if json_path:
@@ -57,18 +59,20 @@ class BinarySegmentationDataset(data.Dataset):
             raise ValueError("max_area cannot be less than 0")
 
     @staticmethod
-    def _validate_area_threshold_mix(area_threshold_mix, max_area) -> None:
-        if area_threshold_mix < 1:
-            raise ValueError("area_threshold_mix cannot be less than 1")
-        if area_threshold_mix < max_area:
-            raise ValueError("")
+    def _validate_area_threshold_mix(resize_mode, area_threshold_mix, max_area) -> None:
+        if resize_mode in BinarySegmentationDataset.RESIZE_MODES_WITH_THRESHOLD:
+            if area_threshold_mix < 1:
+                raise ValueError("area_threshold_mix cannot be less than 1")
+            if area_threshold_mix < max_area:
+                raise ValueError("area_threshold_mix cannot be less than max_area")
 
     @staticmethod
-    def _validate_min_foreground_share(min_foreground_share) -> None:
-        if min_foreground_share < 0:
-            raise ValueError("min_foreground_share cannot be less than 0")
-        if min_foreground_share > 1:
-            raise ValueError("")
+    def _validate_min_foreground_share(resize_mode, min_foreground_share) -> None:
+        if resize_mode in BinarySegmentationDataset.RESIZE_MODES_WITH_MIN_FOREGROUND_SHARE:
+            if min_foreground_share < 0:
+                raise ValueError("min_foreground_share cannot be less than 0")
+            if min_foreground_share > 1:
+                raise ValueError("min_foreground_share cannot exceed 1")
 
     def _resize(self, image, mask):
         if self.resize_mode == "resize":
@@ -119,6 +123,7 @@ class BinarySegmentationDataset(data.Dataset):
         if image is None:
             raise FileNotFoundError(f"Image not found: {path_image}")
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        image = image.astype(np.float32) / 255.0
 
         mask = cv2.imread(str(path_mask), cv2.IMREAD_GRAYSCALE)
         if mask is None:
